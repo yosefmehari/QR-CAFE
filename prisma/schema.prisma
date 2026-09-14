@@ -22,6 +22,8 @@ model User {
 enum Role {
   ADMIN
   KITCHEN
+  JUICE_MAKER
+  WAITER
 }
 
 // ─── CATEGORIES (Burgers, Pizza, Drinks…) ───────────────────────────────────
@@ -74,12 +76,13 @@ model Order {
   status           OrderStatus   @default(PENDING)
   paymentMethod    PaymentMethod @default(CARD)
   paymentStatus    PaymentStatus @default(PENDING)
-  paymentReference String?
-  totalPrice       Decimal       @db.Decimal(10, 2)
-  notes            String?
-  items            OrderItem[]
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  paymentReference  String?
+  paymentScreenshot String?
+  totalPrice        Decimal       @db.Decimal(10, 2)
+  notes             String?
+  items             OrderItem[]
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
 }
 
 enum OrderStatus {
@@ -96,12 +99,25 @@ enum PaymentMethod {
   APPLE_PAY
   GOOGLE_PAY
   CASH
+  BANK_TRANSFER
 }
 
 enum PaymentStatus {
   PENDING
   PAID
   REFUNDED
+}
+
+// ─── CAFE SETTINGS (Admin configurable bank details & cafe info) ──────────────
+
+model CafeSetting {
+  id                String   @id @default("default")
+  bankName          String   @default("Commercial Bank of Ethiopia (CBE)")
+  bankAccountNumber String   @default("1000234567890")
+  accountHolderName String   @default("Aroma & Fork Cafe LLC")
+  telebirrNumber    String?  @default("0911000000")
+  paymentInstructions String? @default("Transfer the total order amount and enter the transaction confirmation code / receipt number below.")
+  updatedAt         DateTime @updatedAt
 }
 
 // ─── ORDER ITEMS ─────────────────────────────────────────────────────────────

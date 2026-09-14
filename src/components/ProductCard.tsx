@@ -1,6 +1,6 @@
 'use client'
 
-import { Plus, Eye, Utensils } from 'lucide-react'
+import { Plus, Eye } from 'lucide-react'
 import type { ProductItem } from '@/lib/types'
 
 interface ProductCardProps {

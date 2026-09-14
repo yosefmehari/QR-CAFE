@@ -7,8 +7,9 @@ import { OrderStatus } from '@prisma/client'
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession()
-    if (!session || (session.role !== 'KITCHEN' && session.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized. Kitchen access required.' }, { status: 401 })
+    const allowedRoles = ['KITCHEN', 'JUICE_MAKER', 'WAITER', 'ADMIN']
+    if (!session || !allowedRoles.includes(session.role)) {
+      return NextResponse.json({ error: 'Unauthorized. Staff access required.' }, { status: 401 })
     }
 
     const { searchParams } = new URL(request.url)
@@ -43,6 +44,13 @@ export async function GET(request: NextRequest) {
                 id: true,
                 name: true,
                 imageUrl: true,
+                category: {
+                  select: {
+                    name: true,
+                    slug: true,
+                    emoji: true,
+                  },
+                },
               },
             },
           },

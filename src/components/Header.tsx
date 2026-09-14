@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { UtensilsCrossed, Search, Coffee, ShoppingBag } from 'lucide-react'
+import { UtensilsCrossed, Search, Coffee, ShoppingBag, X } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
 
 interface HeaderProps {
@@ -44,8 +44,22 @@ export default function Header({ searchQuery, onSearchChange, tableNumber }: Hea
               placeholder="Search burgers, pizzas, coffee, desserts..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-amber-500 dark:focus:border-amber-500 rounded-full focus:bg-white dark:focus:bg-black focus:outline-none transition-all placeholder:text-zinc-400"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') onSearchChange('')
+              }}
+              className="w-full pl-10 pr-9 py-2 text-sm bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-amber-500 dark:focus:border-amber-500 rounded-full focus:bg-white dark:focus:bg-black focus:outline-none transition-all placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-100"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchChange('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1 cursor-pointer transition-colors"
+                title="Clear search (Esc)"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
 
           {/* Right Side Info & Staff Access */}
@@ -89,8 +103,22 @@ export default function Header({ searchQuery, onSearchChange, tableNumber }: Hea
               placeholder="Search burgers, pizzas, coffee..."
               value={searchQuery}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 text-sm bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-amber-500 rounded-full focus:bg-white dark:focus:bg-black focus:outline-none transition-all placeholder:text-zinc-400"
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') onSearchChange('')
+              }}
+              className="w-full pl-10 pr-9 py-2 text-sm bg-zinc-100 dark:bg-zinc-900 border border-transparent focus:border-amber-500 rounded-full focus:bg-white dark:focus:bg-black focus:outline-none transition-all placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-100"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => onSearchChange('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1 cursor-pointer transition-colors"
+                title="Clear search (Esc)"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
         </div>
       </div>

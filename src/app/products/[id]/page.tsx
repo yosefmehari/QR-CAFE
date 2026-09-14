@@ -1,7 +1,7 @@
 import { db } from '@/lib/db'
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Sparkles, Check, Coffee, Utensils } from 'lucide-react'
+import { ArrowLeft, Sparkles, Check, Utensils } from 'lucide-react'
 import type { Metadata } from 'next'
 
 interface ProductPageProps {

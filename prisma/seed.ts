@@ -15,33 +15,31 @@ async function main() {
   await prisma.user.deleteMany()
 
   // 2. Demo Users
-  const adminEmail = process.env.SEED_ADMIN_EMAIL || 'admin@qrcafe.dev'
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD || 'Admin@1234'
-  const kitchenEmail = process.env.SEED_KITCHEN_EMAIL || 'kitchen@qrcafe.dev'
-  const kitchenPassword = process.env.SEED_KITCHEN_PASSWORD || 'Kitchen@1234'
+  const defaultPassword = process.env.SEED_ADMIN_PASSWORD || 'joss5501'
+  const hashedPassword = await bcrypt.hash(defaultPassword, 10)
 
-  const hashedAdminPassword = await bcrypt.hash(adminPassword, 10)
-  const hashedKitchenPassword = await bcrypt.hash(kitchenPassword, 10)
+  const staffUsers = [
+    { name: 'Cafe Admin', email: 'admin@qrcafe.dev', role: 'ADMIN' as const },
+    { name: 'Cafe Admin (Owner)', email: 'admin@qrcafe.com', role: 'ADMIN' as const },
+    { name: 'Kitchen Staff', email: 'kitchen@qrcafe.dev', role: 'KITCHEN' as const },
+    { name: 'Head Chef Marco', email: 'kitchen@qrcafe.com', role: 'KITCHEN' as const },
+    { name: 'Cook Sarah', email: 'linecook@qrcafe.com', role: 'KITCHEN' as const },
+    { name: 'Juice Master Leo', email: 'juice@qrcafe.dev', role: 'JUICE_MAKER' as const },
+    { name: 'Head Waiter Alex', email: 'waiter@qrcafe.dev', role: 'WAITER' as const },
+  ]
 
-  const admin = await prisma.user.create({
-    data: {
-      name: 'Cafe Admin',
-      email: adminEmail,
-      password: hashedAdminPassword,
-      role: 'ADMIN',
-    },
-  })
+  for (const user of staffUsers) {
+    await prisma.user.create({
+      data: {
+        name: user.name,
+        email: user.email,
+        password: hashedPassword,
+        role: user.role,
+      },
+    })
+  }
 
-  const kitchen = await prisma.user.create({
-    data: {
-      name: 'Kitchen Staff',
-      email: kitchenEmail,
-      password: hashedKitchenPassword,
-      role: 'KITCHEN',
-    },
-  })
-
-  console.log(`👤 Users seeded: ${admin.email} (ADMIN), ${kitchen.email} (KITCHEN)`)
+  console.log(`👤 Seeded ${staffUsers.length} staff users with password "${defaultPassword}"`)
 
   // 3. Categories
   const categoriesData = [

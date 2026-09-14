@@ -1,20 +1,18 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   Receipt,
   Search,
-  Filter,
   Clock,
-  CheckCircle2,
   AlertCircle,
   Eye,
   RefreshCw,
   X,
-  ArrowUpDown,
   Utensils,
-  ChefHat,
-  ChevronDown,
+  CheckCircle2,
+  Camera,
+  ExternalLink,
 } from 'lucide-react'
 
 export interface AdminOrderItem {
@@ -35,6 +33,7 @@ export interface AdminOrderRecord {
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
+  paymentScreenshot?: string | null
   totalPrice: number
   notes?: string | null
   createdAt: string
@@ -53,20 +52,20 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
   const [orders, setOrders] = useState<AdminOrderRecord[]>([])
   const [loading, setLoading] = useState(true)
   const [statusFilter, setStatusFilter] = useState<string>('ALL')
-  const [selectedTable, setSelectedTable] = useState<string>('ALL')
+  const [paymentFilter, setPaymentFilter] = useState<'ALL' | 'PENDING' | 'PAID'>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedOrder, setSelectedOrder] = useState<AdminOrderRecord | null>(null)
   const [actionLoading, setActionLoading] = useState(false)
 
-  const fetchOrders = async () => {
-    setLoading(true)
+  const fetchOrders = useCallback(async () => {
     try {
       let url = '/api/admin/orders?'
       if (statusFilter !== 'ALL') url += `status=${statusFilter}&`
-      if (selectedTable !== 'ALL') url += `table=${selectedTable}&`
+      if (paymentFilter !== 'ALL') url += `paymentStatus=${paymentFilter}&`
       if (searchQuery.trim()) url += `search=${encodeURIComponent(searchQuery)}&`
 
       const res = await fetch(url)
+      if (res.status === 401) return
       if (res.ok) {
         const data = await res.json()
         setOrders(data.orders || [])
@@ -76,18 +75,26 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
     } finally {
       setLoading(false)
     }
-  }
+  }, [statusFilter, paymentFilter, searchQuery])
 
   useEffect(() => {
+    queueMicrotask(() => {
+      fetchOrders()
+    })
+  }, [fetchOrders])
+
+  const handleRefresh = () => {
+    setLoading(true)
     fetchOrders()
-  }, [statusFilter, selectedTable])
+  }
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault()
+    setLoading(true)
     fetchOrders()
   }
 
-  const updateOrderStatus = async (orderId: string, newStatus: string) => {
+  const updateOrderStatus = async (orderId: string, newStatus: AdminOrderRecord['status']) => {
     setActionLoading(true)
     try {
       const res = await fetch(`/api/admin/orders/${orderId}`, {
@@ -99,15 +106,55 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
       if (res.ok) {
         // Update locally
         setOrders((prev) =>
-          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus as any } : o))
+          prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
         )
         if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder({ ...selectedOrder, status: newStatus as any })
+          setSelectedOrder({ ...selectedOrder, status: newStatus })
         }
         if (onOrderUpdated) onOrderUpdated()
       }
     } catch (err) {
       console.error('Failed to update status', err)
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const verifyPayment = async (orderId: string, newPaymentStatus: 'PAID' | 'PENDING') => {
+    setActionLoading(true)
+    try {
+      const res = await fetch(`/api/admin/orders/${orderId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          paymentStatus: newPaymentStatus,
+          status: newPaymentStatus === 'PAID' ? 'CONFIRMED' : undefined,
+        }),
+      })
+
+      if (res.ok) {
+        setOrders((prev) =>
+          prev.map((o) =>
+            o.id === orderId
+              ? {
+                  ...o,
+                  paymentStatus: newPaymentStatus,
+                  status: newPaymentStatus === 'PAID' && o.status === 'PENDING' ? 'CONFIRMED' : o.status,
+                }
+              : o
+          )
+        )
+        if (selectedOrder && selectedOrder.id === orderId) {
+          setSelectedOrder({
+            ...selectedOrder,
+            paymentStatus: newPaymentStatus,
+            status: newPaymentStatus === 'PAID' && selectedOrder.status === 'PENDING' ? 'CONFIRMED' : selectedOrder.status,
+          })
+        }
+        if (onOrderUpdated) onOrderUpdated()
+      }
+    } catch (err) {
+      console.error('Failed to verify payment', err)
     } finally {
       setActionLoading(false)
     }
@@ -146,7 +193,7 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
           </div>
 
           <button
-            onClick={() => fetchOrders()}
+            onClick={handleRefresh}
             disabled={loading}
             className="self-start md:self-auto px-3.5 py-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
           >
@@ -161,11 +208,22 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
             <Search className="w-4 h-4 text-zinc-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Search by Order ID or notes..."
+              placeholder="Search by Table, Product, Order ID, notes..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 bg-zinc-950 border border-zinc-800 rounded-2xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
+              className="w-full pl-10 pr-9 py-2 bg-zinc-950 border border-zinc-800 rounded-2xl text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-amber-500"
             />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-white p-1 cursor-pointer transition-colors"
+                title="Clear search"
+                aria-label="Clear search"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </form>
 
           {/* Status Filter Tabs */}
@@ -174,7 +232,7 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
               <button
                 key={st}
                 onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
                   statusFilter === st
                     ? 'bg-amber-500 text-white shadow'
                     : 'bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-800'
@@ -184,6 +242,89 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
               </button>
             ))}
           </div>
+        </div>
+
+        {/* Payment Verification Filter & Batch Check Toolbar */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-zinc-800/80">
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-zinc-400 uppercase tracking-wider flex items-center gap-1">
+              <span>Payment Verification:</span>
+            </span>
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('ALL')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                  paymentFilter === 'ALL'
+                    ? 'bg-zinc-700 text-white'
+                    : 'bg-zinc-800/60 text-zinc-400 hover:text-white'
+                }`}
+              >
+                All
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('PENDING')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  paymentFilter === 'PENDING'
+                    ? 'bg-amber-500 text-zinc-950 font-black shadow-md'
+                    : 'bg-zinc-800/60 text-amber-400/90 hover:bg-amber-500/20'
+                }`}
+              >
+                <Clock className="w-3.5 h-3.5 animate-pulse" />
+                <span>Needs Check</span>
+                {orders.filter((o) => o.paymentStatus !== 'PAID').length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded-full bg-amber-950 text-amber-300 text-[10px] font-mono">
+                    {orders.filter((o) => o.paymentStatus !== 'PAID').length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPaymentFilter('PAID')}
+                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                  paymentFilter === 'PAID'
+                    ? 'bg-emerald-500 text-zinc-950 font-black shadow-md'
+                    : 'bg-zinc-800/60 text-emerald-400 hover:bg-emerald-500/20'
+                }`}
+              >
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Checked &amp; Paid</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Quick Check All Pending Payments Button */}
+          {orders.some((o) => o.paymentStatus !== 'PAID') && (
+            <button
+              type="button"
+              disabled={actionLoading}
+              onClick={async () => {
+                const unverified = orders.filter((o) => o.paymentStatus !== 'PAID')
+                if (!unverified.length) return
+                if (confirm(`Mark all ${unverified.length} pending payments as Checked / Verified?`)) {
+                  setActionLoading(true)
+                  try {
+                    for (const o of unverified) {
+                      await fetch(`/api/admin/orders/${o.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ paymentStatus: 'PAID', status: 'CONFIRMED' }),
+                      })
+                    }
+                    fetchOrders()
+                    if (onOrderUpdated) onOrderUpdated()
+                  } finally {
+                    setActionLoading(false)
+                  }
+                }
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 text-xs font-black flex items-center gap-1.5 transition-all shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Check All Pending Payments</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -260,9 +401,34 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                         <span className="font-mono font-bold text-white text-sm block">
                           ${order.totalPrice.toFixed(2)}
                         </span>
-                        <span className="text-[10px] text-zinc-400 block font-medium">
-                          {order.paymentStatus === 'PAID' ? '✓ Paid Online' : '⚠️ Unpaid / Cash'}
-                        </span>
+                        <div className="mt-1">
+                          {order.paymentStatus === 'PAID' ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                              <CheckCircle2 className="w-3 h-3" />
+                              <span>Checked / Paid</span>
+                            </span>
+                          ) : (
+                            <div className="flex flex-col gap-1 items-start">
+                              <span className="inline-flex items-center gap-1 text-[10px] text-amber-400 font-bold bg-amber-500/10 px-2 py-0.5 rounded-md border border-amber-500/20">
+                                <Clock className="w-3 h-3 animate-pulse" />
+                                <span>Awaiting Check</span>
+                              </span>
+                              <button
+                                type="button"
+                                disabled={actionLoading}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  verifyPayment(order.id, 'PAID')
+                                }}
+                                className="px-2 py-0.5 rounded-md bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold text-[10px] transition-all flex items-center gap-1 shadow-xs cursor-pointer disabled:opacity-50"
+                                title="Click when you have checked the bank payment"
+                              >
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Checked ✓</span>
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-5 py-4">
                         <span
@@ -273,14 +439,46 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                           {order.status}
                         </span>
                       </td>
-                      <td className="px-5 py-4 text-right">
-                        <button
-                          onClick={() => setSelectedOrder(order)}
-                          className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-amber-500/20 text-zinc-300 hover:text-amber-400 border border-zinc-700 hover:border-amber-500/30 transition-all font-semibold inline-flex items-center gap-1.5"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          <span>View</span>
-                        </button>
+                      <td className="px-5 py-4 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-2">
+                          {order.paymentStatus !== 'PAID' ? (
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                verifyPayment(order.id, 'PAID')
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs transition-all flex items-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+                              title="Click to check and approve payment"
+                            >
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>Checked ✓</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              disabled={actionLoading}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                verifyPayment(order.id, 'PENDING')
+                              }}
+                              className="px-2.5 py-1.5 rounded-xl bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-amber-400 border border-zinc-700 text-[11px] font-semibold transition-all flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                              title="Revert back to pending check"
+                            >
+                              <span>Uncheck</span>
+                            </button>
+                          )}
+
+                          <button
+                            type="button"
+                            onClick={() => setSelectedOrder(order)}
+                            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-amber-500/20 text-zinc-300 hover:text-amber-400 border border-zinc-700 hover:border-amber-500/30 transition-all font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            <span>Details</span>
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   )
@@ -361,14 +559,86 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                 ))}
               </div>
 
-              {/* Payment Details */}
-              <div className="p-3 rounded-2xl bg-zinc-950/60 border border-zinc-800 flex items-center justify-between text-xs">
-                <span className="text-zinc-400 font-semibold">Payment Info:</span>
-                <span className={`font-bold ${selectedOrder.paymentStatus === 'PAID' ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  {selectedOrder.paymentStatus === 'PAID'
-                    ? `✓ ${selectedOrder.paymentReference || 'Paid Online'}`
-                    : '⚠️ Pay at Counter / Unpaid'}
-                </span>
+              {/* Payment Verification Card */}
+              <div className="p-4 rounded-2xl bg-zinc-950/80 border border-zinc-800 space-y-3">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-400 font-bold uppercase tracking-wider">Payment Status</span>
+                  <span className={`font-bold flex items-center gap-1 ${selectedOrder.paymentStatus === 'PAID' ? 'text-emerald-400' : 'text-amber-400'}`}>
+                    {selectedOrder.paymentStatus === 'PAID' ? (
+                      <>
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Payment Checked &amp; Verified</span>
+                      </>
+                    ) : (
+                      <>
+                        <Clock className="w-3.5 h-3.5 animate-pulse" />
+                        <span>Awaiting Admin Check</span>
+                      </>
+                    )}
+                  </span>
+                </div>
+
+                <div className="p-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-300 font-mono">
+                  <div className="text-[10px] text-zinc-500 font-sans uppercase font-bold">Transaction Reference:</div>
+                  <div className="text-amber-400 font-bold break-all mt-0.5">
+                    {selectedOrder.paymentReference || 'No reference recorded'}
+                  </div>
+                </div>
+
+                {/* Customer Uploaded Receipt Screenshot */}
+                {selectedOrder.paymentScreenshot && (
+                  <div className="space-y-1.5 p-3 rounded-xl bg-zinc-900 border border-amber-500/30">
+                    <div className="flex items-center justify-between text-[10px] font-bold text-amber-400">
+                      <span className="flex items-center gap-1.5">
+                        <Camera className="w-3.5 h-3.5" />
+                        <span>Receipt Screenshot Attached</span>
+                      </span>
+                      <a
+                        href={selectedOrder.paymentScreenshot}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline flex items-center gap-1 hover:text-amber-300"
+                      >
+                        <span>Open Full</span>
+                        <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                    <div className="w-full h-44 rounded-lg overflow-hidden bg-black/40 border border-zinc-800 flex items-center justify-center p-1">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={selectedOrder.paymentScreenshot}
+                        alt="Customer receipt proof"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {selectedOrder.paymentStatus !== 'PAID' ? (
+                  <button
+                    type="button"
+                    disabled={actionLoading}
+                    onClick={() => verifyPayment(selectedOrder.id, 'PAID')}
+                    className="w-full py-2.5 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-black text-xs transition-all flex items-center justify-center gap-1.5 shadow-md shadow-emerald-500/20 cursor-pointer disabled:opacity-50"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>Checked ✓ (Approve &amp; Confirm Order)</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center justify-between text-[11px] text-zinc-400 pt-1">
+                    <span className="text-emerald-400 font-semibold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" /> Payment confirmed by admin
+                    </span>
+                    <button
+                      type="button"
+                      disabled={actionLoading}
+                      onClick={() => verifyPayment(selectedOrder.id, 'PENDING')}
+                      className="text-zinc-500 hover:text-amber-400 underline text-[10px] cursor-pointer"
+                    >
+                      Revert to Pending
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Total Summary */}

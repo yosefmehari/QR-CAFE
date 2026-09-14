@@ -1,7 +1,7 @@
 import { SignJWT, jwtVerify } from 'jose'
 import { cookies } from 'next/headers'
 
-export type UserRole = 'ADMIN' | 'KITCHEN'
+export type UserRole = 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER'
 
 export interface SessionPayload {
   userId: string

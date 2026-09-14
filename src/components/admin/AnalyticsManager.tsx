@@ -8,10 +8,8 @@ import {
   Award,
   Users,
   RefreshCw,
-  Clock,
   Sparkles,
   Layers,
-  ArrowUpRight,
 } from 'lucide-react'
 
 export interface AnalyticsData {
@@ -25,16 +23,16 @@ export interface AnalyticsData {
     averageOrderValue: number
   }
   statusCounts: Record<string, number>
-  tableRankings: Array<{
-    tableNumber: number
-    orderCount: number
-  }>
   topProducts: Array<{
     id: string
     name: string
     imageUrl?: string | null
     quantity: number
     revenue: number
+  }>
+  tableRankings: Array<{
+    tableNumber: number
+    orderCount: number
   }>
 }
 
@@ -43,7 +41,6 @@ export default function AnalyticsManager() {
   const [loading, setLoading] = useState(true)
 
   const fetchAnalytics = async () => {
-    setLoading(true)
     try {
       const res = await fetch('/api/admin/analytics')
       if (res.ok) {
@@ -57,8 +54,15 @@ export default function AnalyticsManager() {
     }
   }
 
-  useEffect(() => {
+  const handleRefresh = () => {
+    setLoading(true)
     fetchAnalytics()
+  }
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      fetchAnalytics()
+    })
   }, [])
 
   if (loading && !data) {
@@ -101,7 +105,7 @@ export default function AnalyticsManager() {
         </div>
 
         <button
-          onClick={fetchAnalytics}
+          onClick={handleRefresh}
           disabled={loading}
           className="self-start sm:self-auto px-3.5 py-2 rounded-2xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 border border-zinc-700 text-xs font-semibold flex items-center gap-2 transition-colors disabled:opacity-50"
         >
@@ -136,7 +140,7 @@ export default function AnalyticsManager() {
           <div className="absolute top-0 right-0 w-24 h-24 bg-amber-500/10 rounded-full blur-2xl group-hover:bg-amber-500/20 transition-all"></div>
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-              Today's Revenue
+              Today&apos;s Revenue
             </span>
             <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
               <Sparkles className="w-4 h-4" />

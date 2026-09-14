@@ -58,17 +58,63 @@ export default async function AdminPage() {
     activeTables: tables.filter((t) => t.isActive).length,
   }
 
+  // 6. Fetch real Staff from PostgreSQL
+  const staff = await db.user.findMany({
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      createdAt: true,
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+
   // Serialize types for client component
   const serializedProducts = products.map((p) => ({
     ...p,
     price: Number(p.price),
   }))
 
+  const serializedStaff = staff.map((s) => ({
+    ...s,
+    createdAt: s.createdAt.toISOString(),
+  }))
+
+  // 7. Fetch Cafe Bank Settings
+  let settings = await db.cafeSetting.findUnique({
+    where: { id: 'default' },
+  })
+
+  if (!settings) {
+    settings = await db.cafeSetting.create({
+      data: {
+        id: 'default',
+        bankName: 'Commercial Bank of Ethiopia (CBE)',
+        bankAccountNumber: '1000234567890',
+        accountHolderName: 'Aroma & Fork Cafe LLC',
+        telebirrNumber: '0911000000',
+        paymentInstructions: 'Transfer the total order amount and enter the transaction confirmation code / receipt number below.',
+      },
+    })
+  }
+
+  const serializedSettings = {
+    id: settings.id,
+    bankName: settings.bankName,
+    bankAccountNumber: settings.bankAccountNumber,
+    accountHolderName: settings.accountHolderName,
+    telebirrNumber: settings.telebirrNumber,
+    paymentInstructions: settings.paymentInstructions,
+  }
+
   return (
     <AdminDashboardClient
       initialCategories={categories}
       initialProducts={serializedProducts}
       initialTables={tables}
+      initialStaff={serializedStaff}
+      initialSettings={serializedSettings}
       initialStats={stats}
       adminUser={{
         name: session.name,

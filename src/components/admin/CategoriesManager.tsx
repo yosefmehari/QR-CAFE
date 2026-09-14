@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Edit2, Trash2, FolderTree, AlertCircle, X, Check, Loader2 } from 'lucide-react'
+import { Plus, Edit2, Trash2, FolderTree, AlertCircle, X, Loader2 } from 'lucide-react'
 
 export interface AdminCategory {
   id: string
@@ -23,7 +23,7 @@ export default function CategoriesManager({
   onRefresh,
   showToast,
 }: Props) {
-  const [categories, setCategories] = useState<AdminCategory[]>(initialCategories)
+  const categories = initialCategories
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [editingCategory, setEditingCategory] = useState<AdminCategory | null>(null)
 

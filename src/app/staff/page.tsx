@@ -5,14 +5,12 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
   ShieldCheck,
-  ChefHat,
   ArrowRight,
   AlertCircle,
   Loader2,
   Lock,
   Mail,
   ArrowLeft,
-  Coffee,
 } from 'lucide-react'
 
 export default function StaffPortalPage() {
@@ -167,36 +165,63 @@ export default function StaffPortalPage() {
             </button>
           </form>
 
-          {/* Quick Demo Credentials Helper */}
+          {/* Quick Staff Accounts Helper */}
           <div className="pt-3 border-t border-zinc-800/80">
-            <p className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider text-center mb-2">
-              Demo Staff Credentials
-            </p>
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
+                Staff Accounts
+              </span>
+              <span className="text-[10px] text-zinc-500">
+                Select account to fill email
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
                 onClick={() => {
                   setEmail('admin@qrcafe.dev')
-                  setPassword('Admin@1234')
                   setErrorMessage(null)
                 }}
-                className="p-2 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-400 hover:text-amber-400 hover:border-amber-500/30 transition-all text-center"
+                className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-400 hover:text-amber-400 hover:border-amber-500/30 transition-all text-center cursor-pointer"
               >
-                <div className="font-bold text-white">Admin</div>
-                <div className="text-[10px] text-zinc-500">admin@qrcafe.dev</div>
+                <div className="font-bold text-white">Administrator</div>
+                <div className="text-[10px] text-zinc-500 truncate">admin@qrcafe.dev</div>
               </button>
 
               <button
                 type="button"
                 onClick={() => {
                   setEmail('kitchen@qrcafe.dev')
-                  setPassword('Kitchen@1234')
                   setErrorMessage(null)
                 }}
-                className="p-2 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-400 hover:text-orange-400 hover:border-orange-500/30 transition-all text-center"
+                className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-400 hover:text-orange-400 hover:border-orange-500/30 transition-all text-center cursor-pointer"
               >
-                <div className="font-bold text-white">Kitchen</div>
-                <div className="text-[10px] text-zinc-500">kitchen@qrcafe.dev</div>
+                <div className="font-bold text-white">Kitchen Chef</div>
+                <div className="text-[10px] text-zinc-500 truncate">kitchen@qrcafe.dev</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('juice@qrcafe.dev')
+                  setErrorMessage(null)
+                }}
+                className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-400 hover:text-emerald-400 hover:border-emerald-500/30 transition-all text-center cursor-pointer"
+              >
+                <div className="font-bold text-white">Juice Maker</div>
+                <div className="text-[10px] text-zinc-500 truncate">juice@qrcafe.dev</div>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('waiter@qrcafe.dev')
+                  setErrorMessage(null)
+                }}
+                className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-400 hover:text-blue-400 hover:border-blue-500/30 transition-all text-center cursor-pointer"
+              >
+                <div className="font-bold text-white">Waiter Staff</div>
+                <div className="text-[10px] text-zinc-500 truncate">waiter@qrcafe.dev</div>
               </button>
             </div>
           </div>

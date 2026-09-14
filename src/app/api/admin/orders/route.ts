@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
-import { OrderStatus } from '@prisma/client'
+import { OrderStatus, Prisma } from '@prisma/client'
 
 // GET /api/admin/orders - Full orders list with filtering & pagination
 export async function GET(request: NextRequest) {
@@ -13,14 +13,19 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const status = searchParams.get('status') as OrderStatus | null
+    const paymentStatus = searchParams.get('paymentStatus') as 'PAID' | 'PENDING' | 'REFUNDED' | null
     const tableNumber = searchParams.get('table')
     const search = searchParams.get('search')
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
 
-    const where: any = {}
+    const where: Prisma.OrderWhereInput = {}
 
     if (status && Object.values(OrderStatus).includes(status)) {
       where.status = status
+    }
+
+    if (paymentStatus && ['PAID', 'PENDING', 'REFUNDED'].includes(paymentStatus)) {
+      where.paymentStatus = paymentStatus
     }
 
     if (tableNumber) {
@@ -30,11 +35,30 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (search) {
-      where.OR = [
-        { id: { contains: search, mode: 'insensitive' } },
-        { notes: { contains: search, mode: 'insensitive' } },
+    if (search && search.trim()) {
+      const cleanSearch = search.trim()
+      const searchNum = parseInt(cleanSearch.replace(/\D/g, ''), 10)
+
+      const orConditions: Prisma.OrderWhereInput[] = [
+        { id: { contains: cleanSearch, mode: 'insensitive' } },
+        { notes: { contains: cleanSearch, mode: 'insensitive' } },
+        { paymentReference: { contains: cleanSearch, mode: 'insensitive' } },
+        {
+          items: {
+            some: {
+              product: {
+                name: { contains: cleanSearch, mode: 'insensitive' },
+              },
+            },
+          },
+        },
       ]
+
+      if (!isNaN(searchNum) && searchNum > 0) {
+        orConditions.push({ table: { number: searchNum } })
+      }
+
+      where.OR = orConditions
     }
 
     const orders = await db.order.findMany({
@@ -68,6 +92,7 @@ export async function GET(request: NextRequest) {
       paymentMethod: o.paymentMethod,
       paymentStatus: o.paymentStatus,
       paymentReference: o.paymentReference,
+      paymentScreenshot: o.paymentScreenshot,
       totalPrice: Number(o.totalPrice),
       notes: o.notes,
       createdAt: o.createdAt.toISOString(),

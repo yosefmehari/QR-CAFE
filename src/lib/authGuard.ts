@@ -13,11 +13,15 @@ export async function requireAuth(allowedRoles?: UserRole[]): Promise<SessionPay
   }
 
   if (allowedRoles && allowedRoles.length > 0 && !allowedRoles.includes(session.role)) {
-    // If a Kitchen staff tries to enter Admin, route them to Kitchen dashboard
     if (session.role === 'KITCHEN') {
       redirect('/kitchen')
     }
-    // If an Admin somehow hits an unauthorized area, route to /admin
+    if (session.role === 'JUICE_MAKER') {
+      redirect('/juice')
+    }
+    if (session.role === 'WAITER') {
+      redirect('/waiter')
+    }
     redirect('/admin')
   }
 

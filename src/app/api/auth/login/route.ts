@@ -51,7 +51,14 @@ export async function POST(request: NextRequest) {
     // 4. Set HTTP-only session cookie
     await setSessionCookie(token)
 
-    const redirectUrl = user.role === 'ADMIN' ? '/admin' : '/kitchen'
+    const redirectUrl =
+      user.role === 'ADMIN'
+        ? '/admin'
+        : user.role === 'WAITER'
+          ? '/waiter'
+          : user.role === 'JUICE_MAKER'
+            ? '/juice'
+            : '/kitchen'
 
     return NextResponse.json({
       success: true,

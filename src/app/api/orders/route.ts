@@ -15,7 +15,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const { tableNumber, notes, items, paymentMethod, cardDetails } = parsed.data
+    const {
+      tableNumber,
+      notes,
+      items,
+      paymentMethod,
+      cardDetails,
+      bankTransferDetails,
+      paymentScreenshot: bodyScreenshot,
+    } = parsed.data
+
+    const screenshot =
+      bodyScreenshot?.trim() ||
+      bankTransferDetails?.screenshotUrl?.trim() ||
+      null
 
     // 2. Validate physical table in PostgreSQL
     const table = await db.table.findUnique({
@@ -29,23 +42,103 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // 3. Look up real products in PostgreSQL to verify existence, availability, and authentic prices
+    // 3. Strict Payment Validation: Do not let invalid payments pass
+    if (paymentMethod === 'CARD') {
+      const cleanNum = cardDetails?.cardNumber?.replace(/\D/g, '') || ''
+      if (cleanNum.length < 13 || cleanNum.length > 19) {
+        return NextResponse.json(
+          { error: 'Payment declined: Card number must be between 13 and 19 digits.' },
+          { status: 400 }
+        )
+      }
+
+      // Luhn algorithm verification
+      let sum = 0
+      let shouldDouble = false
+      for (let i = cleanNum.length - 1; i >= 0; i--) {
+        let digit = parseInt(cleanNum.charAt(i), 10)
+        if (shouldDouble) {
+          digit *= 2
+          if (digit > 9) digit -= 9
+        }
+        sum += digit
+        shouldDouble = !shouldDouble
+      }
+
+      if (sum % 10 !== 0) {
+        return NextResponse.json(
+          { error: 'Payment declined: Invalid card number check digit. Please check your card number.' },
+          { status: 400 }
+        )
+      }
+
+      // Expiration check (MM/YY)
+      const expiry = cardDetails?.expiry?.trim() || ''
+      if (!/^\d{2}\/\d{2}$/.test(expiry)) {
+        return NextResponse.json(
+          { error: 'Payment declined: Invalid expiration date format. Use MM/YY.' },
+          { status: 400 }
+        )
+      }
+
+      const [expMonth, expYear] = expiry.split('/').map(Number)
+      if (expMonth < 1 || expMonth > 12) {
+        return NextResponse.json(
+          { error: 'Payment declined: Invalid expiration month.' },
+          { status: 400 }
+        )
+      }
+
+      const now = new Date()
+      const currentYear = now.getFullYear() % 100 // 2-digit year
+      const currentMonth = now.getMonth() + 1
+
+      if (expYear < currentYear || (expYear === currentYear && expMonth < currentMonth)) {
+        return NextResponse.json(
+          { error: 'Payment declined: Card has expired.' },
+          { status: 400 }
+        )
+      }
+
+      // CVC check
+      const cvc = cardDetails?.cvc?.trim() || ''
+      if (cvc.length < 3 || cvc.length > 4) {
+        return NextResponse.json(
+          { error: 'Payment declined: Invalid card security code (CVC).' },
+          { status: 400 }
+        )
+      }
+    } else if (paymentMethod === 'BANK_TRANSFER') {
+      const ref = bankTransferDetails?.transactionReference?.trim()
+      if (!ref && !screenshot) {
+        return NextResponse.json(
+          { error: 'Please enter a transaction confirmation code or upload a receipt screenshot.' },
+          { status: 400 }
+        )
+      }
+      if (ref && ref.length < 3 && !screenshot) {
+        return NextResponse.json(
+          { error: 'Transaction reference must be at least 3 characters long, or upload a receipt screenshot.' },
+          { status: 400 }
+        )
+      }
+    }
+
+    // 4. Batch query and validate menu products
     const productIds = items.map((i) => i.productId)
     const dbProducts = await db.product.findMany({
-      where: {
-        id: { in: productIds },
-      },
+      where: { id: { in: productIds } },
     })
 
     const productMap = new Map(dbProducts.map((p) => [p.id, p]))
 
     let calculatedTotal = 0
-    const validatedItems: Array<{
+    const validatedItems: {
       productId: string
       quantity: number
       unitPrice: number
-      notes?: string | null
-    }> = []
+      notes: string | null
+    }[] = []
 
     for (const item of items) {
       const product = productMap.get(item.productId)
@@ -59,7 +152,7 @@ export async function POST(request: NextRequest) {
 
       if (!product.isAvailable) {
         return NextResponse.json(
-          { error: `"${product.name}" is currently sold out. Please remove it from your cart.` },
+          { error: `"${product.name}" is currently sold out and unavailable` },
           { status: 400 }
         )
       }
@@ -75,16 +168,27 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // 4. Determine Payment Resolution
+    // 5. Determine Payment Resolution
     let paymentStatus: 'PAID' | 'PENDING' = 'PENDING'
     let paymentReference = 'Pay at Counter / Table'
 
     if (paymentMethod === 'CARD') {
       paymentStatus = 'PAID'
-      const cleanNum = cardDetails?.cardNumber?.replace(/\s+/g, '') || '4242'
+      const cleanNum = cardDetails?.cardNumber?.replace(/\D/g, '') || '4242'
       const last4 = cleanNum.slice(-4) || '4242'
       const cardBrand = cleanNum.startsWith('5') ? 'Mastercard' : cleanNum.startsWith('3') ? 'Amex' : 'Visa'
       paymentReference = `${cardBrand} •••• ${last4} (TXN-${Date.now().toString(36).toUpperCase()})`
+    } else if (paymentMethod === 'BANK_TRANSFER') {
+      paymentStatus = 'PENDING'
+      const ref = bankTransferDetails?.transactionReference?.trim()
+      const bank = bankTransferDetails?.bankUsed?.trim() || 'Bank Transfer'
+      if (ref && screenshot) {
+        paymentReference = `${bank}: TXN #${ref} (Screenshot Attached)`
+      } else if (ref) {
+        paymentReference = `${bank}: TXN #${ref}`
+      } else {
+        paymentReference = `${bank}: [Receipt Screenshot Attached]`
+      }
     } else if (paymentMethod === 'APPLE_PAY') {
       paymentStatus = 'PAID'
       paymentReference = `Apple Pay (TXN-${Date.now().toString(36).toUpperCase()})`
@@ -96,7 +200,7 @@ export async function POST(request: NextRequest) {
       paymentReference = 'Pay with Cash at Counter'
     }
 
-    // 5. Execute Atomic PostgreSQL Transaction via Prisma
+    // 6. Execute Atomic PostgreSQL Transaction via Prisma
     const newOrder = await db.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
@@ -107,6 +211,7 @@ export async function POST(request: NextRequest) {
           paymentMethod,
           paymentStatus,
           paymentReference,
+          paymentScreenshot: screenshot,
           items: {
             create: validatedItems.map((vi) => ({
               productId: vi.productId,
@@ -131,22 +236,22 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(
       {
-        success: true,
-        orderId: newOrder.id,
+        id: newOrder.id,
         tableNumber: table.number,
         totalPrice: Number(newOrder.totalPrice),
         status: newOrder.status,
-        paymentMethod: newOrder.paymentMethod,
         paymentStatus: newOrder.paymentStatus,
         paymentReference: newOrder.paymentReference,
-        createdAt: newOrder.createdAt,
+        paymentScreenshot: newOrder.paymentScreenshot,
+        createdAt: newOrder.createdAt.toISOString(),
       },
       { status: 201 }
     )
-  } catch (error) {
-    console.error('Failed to create order:', error)
+  } catch (error: unknown) {
+    console.error('Order creation error:', error)
+    const message = error instanceof Error ? error.message : 'Unknown internal server error'
     return NextResponse.json(
-      { error: 'Internal server error while creating your order' },
+      { error: 'An unexpected error occurred while placing your order', details: message },
       { status: 500 }
     )
   }

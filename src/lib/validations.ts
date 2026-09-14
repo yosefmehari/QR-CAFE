@@ -1,4 +1,4 @@
-import { z } from 'zod'
+import { z, ZodError } from 'zod'
 
 // ─── CUSTOMER ORDER SCHEMAS ──────────────────────────────────────────────────
 
@@ -27,8 +27,9 @@ export const createOrderSchema = z.object({
     .optional()
     .nullable(),
   paymentMethod: z
-    .enum(['CARD', 'APPLE_PAY', 'GOOGLE_PAY', 'CASH'] as const)
+    .enum(['CARD', 'APPLE_PAY', 'GOOGLE_PAY', 'CASH', 'BANK_TRANSFER'] as const)
     .default('CARD'),
+  paymentScreenshot: z.string().optional().nullable(),
   cardDetails: z
     .object({
       cardholderName: z.string().optional(),
@@ -38,10 +39,29 @@ export const createOrderSchema = z.object({
     })
     .optional()
     .nullable(),
+  bankTransferDetails: z
+    .object({
+      senderName: z.string().optional(),
+      transactionReference: z.string().optional().nullable(),
+      screenshotUrl: z.string().optional().nullable(),
+      bankUsed: z.string().optional(),
+    })
+    .optional()
+    .nullable(),
   items: z
     .array(orderItemSchema)
     .min(1, 'Order must contain at least one item')
     .max(50, 'Orders cannot exceed 50 distinct line items'),
+})
+
+// ─── CAFE SETTINGS SCHEMAS ───────────────────────────────────────────────────
+
+export const updateCafeSettingsSchema = z.object({
+  bankName: z.string().min(2, 'Bank name must be at least 2 characters'),
+  bankAccountNumber: z.string().min(5, 'Bank account number must be at least 5 characters'),
+  accountHolderName: z.string().min(2, 'Account holder name must be at least 2 characters'),
+  telebirrNumber: z.string().optional().nullable(),
+  paymentInstructions: z.string().max(500, 'Instructions cannot exceed 500 characters').optional().nullable(),
 })
 
 // ─── AUTHENTICATION SCHEMAS ──────────────────────────────────────────────────
@@ -125,15 +145,31 @@ export const updateTableSchema = createTableSchema.partial()
 // ─── ORDER STATUS SCHEMAS ────────────────────────────────────────────────────
 
 export const updateOrderStatusSchema = z.object({
-  status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'] as const),
+  status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'] as const).optional(),
+  paymentStatus: z.enum(['PENDING', 'PAID', 'REFUNDED'] as const).optional(),
+  paymentReference: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
 })
 
 // ─── HELPER: FORMAT ZOD ERRORS ───────────────────────────────────────────────
 
-export function formatZodError(error: any): string {
-  const issues = error?.issues || error?.errors || []
-  if (!Array.isArray(issues) || issues.length === 0) {
-    return error?.message || 'Validation error'
+export function formatZodError(error: unknown): string {
+  if (error instanceof ZodError) {
+    return error.issues.map((e) => `${e.path.join('.') || 'field'}: ${e.message}`).join(', ')
   }
-  return issues.map((e: any) => `${e.path?.join('.') || 'field'}: ${e.message}`).join(', ')
+  if (
+    error &&
+    typeof error === 'object' &&
+    'issues' in error &&
+    Array.isArray((error as { issues: unknown[] }).issues)
+  ) {
+    const issues = (
+      error as { issues: Array<{ path?: (string | number)[]; message?: string }> }
+    ).issues
+    return issues.map((e) => `${e.path?.join('.') || 'field'}: ${e.message || 'invalid'}`).join(', ')
+  }
+  if (error instanceof Error) {
+    return error.message
+  }
+  return 'Validation error'
 }

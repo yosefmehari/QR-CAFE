@@ -10,14 +10,16 @@ export default function ActiveOrderBadge() {
   const [isDismissed, setIsDismissed] = useState(false)
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const storedId = localStorage.getItem('qr_cafe_active_order_id')
-      const storedTable = localStorage.getItem('qr_cafe_active_order_table')
-      if (storedId) {
-        setActiveOrderId(storedId)
-        setActiveOrderTable(storedTable)
+    queueMicrotask(() => {
+      if (typeof window !== 'undefined') {
+        const storedId = localStorage.getItem('qr_cafe_active_order_id')
+        const storedTable = localStorage.getItem('qr_cafe_active_order_table')
+        if (storedId) {
+          setActiveOrderId(storedId)
+          setActiveOrderTable(storedTable)
+        }
       }
-    }
+    })
   }, [])
 
   if (!activeOrderId || isDismissed) return null

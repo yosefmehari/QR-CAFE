@@ -18,14 +18,15 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
   const [specialNote, setSpecialNote] = useState('')
   const [showConfirmation, setShowConfirmation] = useState(false)
 
+  const [prevProductId, setPrevProductId] = useState(product?.id)
+
   // Reset local state whenever a new product is selected
-  useEffect(() => {
-    if (product) {
-      setQuantity(1)
-      setSpecialNote('')
-      setShowConfirmation(false)
-    }
-  }, [product])
+  if (product && product.id !== prevProductId) {
+    setPrevProductId(product.id)
+    setQuantity(1)
+    setSpecialNote('')
+    setShowConfirmation(false)
+  }
 
   // Close on Escape key
   useEffect(() => {

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { UtensilsCrossed, QrCode, X, CheckCircle2 } from 'lucide-react'
+import { UtensilsCrossed, QrCode, X } from 'lucide-react'
 
 interface TableBannerProps {
   tableNumber: number | null

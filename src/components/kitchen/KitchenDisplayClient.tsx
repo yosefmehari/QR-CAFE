@@ -1,8 +1,7 @@
 'use client'
 
-import { useState, useEffect, useRef, useTransition } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import {
-  ChefHat,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -15,8 +14,6 @@ import {
   Check,
   XCircle,
   History,
-  ArrowRight,
-  Filter,
 } from 'lucide-react'
 
 export type KitchenOrderItem = {
@@ -62,9 +59,10 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
 
   // Track known order IDs to trigger sound when a genuinely new order arrives
   const previousOrderIdsRef = useRef<Set<string>>(new Set(initialOrders.map((o) => o.id)))
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
 
   // Synthesized Web Audio chime (no external audio files required)
-  const playChime = () => {
+  const playChime = useCallback(() => {
     if (!soundEnabled || typeof window === 'undefined') return
     try {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
@@ -96,15 +94,15 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
     } catch {
       // Audio context might be restricted before user interaction
     }
-  }
+  }, [soundEnabled])
 
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3500)
-  }
+  }, [])
 
   // Fetch updated orders from API
-  const fetchOrders = async (silent = false) => {
+  const fetchOrders = useCallback(async (silent = false) => {
     if (!silent) setIsRefreshing(true)
     try {
       const isHistoryTab = activeTab === 'history'
@@ -132,15 +130,16 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
     } finally {
       if (!silent) setIsRefreshing(false)
     }
-  }
+  }, [activeTab, playChime, showToast])
 
   // 3.5-second live polling loop for real-time ticket delivery
   useEffect(() => {
     const interval = setInterval(() => {
       fetchOrders(true)
+      setCurrentTime(Date.now())
     }, 3500)
     return () => clearInterval(interval)
-  }, [activeTab, soundEnabled])
+  }, [fetchOrders])
 
   // Status progression action
   const updateStatus = async (
@@ -185,7 +184,7 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
 
   // Calculate elapsed time formatted string
   const getElapsedMinutes = (dateStr: string) => {
-    const diffMs = Date.now() - new Date(dateStr).getTime()
+    const diffMs = currentTime - new Date(dateStr).getTime()
     return Math.max(0, Math.floor(diffMs / 60000))
   }
 
@@ -389,11 +388,11 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
                         </span>
                         {order.paymentStatus === 'PAID' ? (
                           <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                            PAID
+                            PAID ✓
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                            COLLECT CASH
+                          <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                            ⏳ AWAITING PAYMENT CHECK
                           </span>
                         )}
                       </div>
@@ -482,14 +481,21 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
                   <div className="flex items-center justify-between gap-2 pt-3">
                     {/* Status progression triggers */}
                     {order.status === 'PENDING' || order.status === 'CONFIRMED' ? (
-                      <button
-                        onClick={() => updateStatus(order.id, 'PREPARING')}
-                        disabled={updatingOrderId === order.id}
-                        className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50"
-                      >
-                        <Flame className="w-4 h-4" />
-                        <span>Start Cooking</span>
-                      </button>
+                      order.paymentStatus !== 'PAID' ? (
+                        <div className="w-full py-2.5 px-3 rounded-2xl bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-bold text-center flex items-center justify-center gap-2">
+                          <Clock className="w-3.5 h-3.5 animate-spin" />
+                          <span>Hold: Admin checking payment...</span>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => updateStatus(order.id, 'PREPARING')}
+                          disabled={updatingOrderId === order.id}
+                          className="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs flex items-center justify-center gap-2 shadow-lg shadow-blue-600/20 transition-all disabled:opacity-50 cursor-pointer"
+                        >
+                          <Flame className="w-4 h-4" />
+                          <span>Start Cooking</span>
+                        </button>
+                      )
                     ) : order.status === 'PREPARING' ? (
                       <button
                         onClick={() => updateStatus(order.id, 'READY')}

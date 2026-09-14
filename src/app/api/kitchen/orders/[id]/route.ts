@@ -10,8 +10,9 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession()
-    if (!session || (session.role !== 'KITCHEN' && session.role !== 'ADMIN')) {
-      return NextResponse.json({ error: 'Unauthorized. Kitchen access required.' }, { status: 401 })
+    const allowedRoles = ['KITCHEN', 'JUICE_MAKER', 'WAITER', 'ADMIN']
+    if (!session || !allowedRoles.includes(session.role)) {
+      return NextResponse.json({ error: 'Unauthorized. Staff access required.' }, { status: 401 })
     }
 
     const { id } = await context.params

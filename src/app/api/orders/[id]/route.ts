@@ -39,6 +39,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       paymentMethod: order.paymentMethod,
       paymentStatus: order.paymentStatus,
       paymentReference: order.paymentReference,
+      paymentScreenshot: order.paymentScreenshot,
       totalPrice: Number(order.totalPrice),
       notes: order.notes,
       tableNumber: order.table.number,

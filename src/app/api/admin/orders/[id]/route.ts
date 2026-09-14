@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
 import { updateOrderStatusSchema, formatZodError } from '@/lib/validations'
+import { Prisma } from '@prisma/client'
 
 // PATCH /api/admin/orders/[id] - Update order status or details
 export async function PATCH(
@@ -16,18 +17,32 @@ export async function PATCH(
 
     const { id } = await context.params
     const rawBody = await request.json()
-    const { status, notes } = rawBody
+    const parsed = updateOrderStatusSchema.safeParse(rawBody)
 
-    const data: any = {}
-    if (status) {
-      const parsed = updateOrderStatusSchema.safeParse({ status })
-      if (!parsed.success) {
-        return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 })
-      }
-      data.status = parsed.data.status
+    if (!parsed.success) {
+      return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 })
     }
 
-    if (typeof notes === 'string') {
+    const { status, paymentStatus, paymentReference, notes } = parsed.data
+    const data: Prisma.OrderUpdateInput = {}
+
+    if (status) {
+      data.status = status
+    }
+
+    if (paymentStatus) {
+      data.paymentStatus = paymentStatus
+      // If admin marks payment as verified/PAID and status is PENDING, auto confirm the order
+      if (paymentStatus === 'PAID' && !status) {
+        data.status = 'CONFIRMED'
+      }
+    }
+
+    if (paymentReference !== undefined) {
+      data.paymentReference = paymentReference
+    }
+
+    if (notes !== undefined) {
       data.notes = notes
     }
 

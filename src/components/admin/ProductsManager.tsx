@@ -11,8 +11,6 @@ import {
   X,
   AlertCircle,
   Loader2,
-  Eye,
-  EyeOff,
 } from 'lucide-react'
 import type { AdminCategory } from './CategoriesManager'
 
@@ -65,19 +63,26 @@ export default function ProductsManager({
   const [togglingId, setTogglingId] = useState<string | null>(null)
 
   const filteredProducts = useMemo(() => {
+    const q = searchQuery.toLowerCase().trim()
+    const terms = q.split(/\s+/).filter(Boolean)
+
     return initialProducts.filter((p) => {
+      const cat = categories.find((c) => c.id === p.categoryId)
       const matchesCategory =
         selectedCategoryFilter === 'all' || p.categoryId === selectedCategoryFilter
 
-      const q = searchQuery.toLowerCase().trim()
       const matchesSearch =
-        q === '' ||
-        p.name.toLowerCase().includes(q) ||
-        (p.description && p.description.toLowerCase().includes(q))
+        terms.length === 0 ||
+        terms.every(
+          (term) =>
+            p.name.toLowerCase().includes(term) ||
+            (p.description && p.description.toLowerCase().includes(term)) ||
+            (cat && cat.name.toLowerCase().includes(term))
+        )
 
       return matchesCategory && matchesSearch
     })
-  }, [initialProducts, selectedCategoryFilter, searchQuery])
+  }, [initialProducts, categories, selectedCategoryFilter, searchQuery])
 
   const openCreateModal = () => {
     setEditingProduct(null)
@@ -237,11 +242,24 @@ export default function ProductsManager({
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
           <input
             type="text"
-            placeholder="Search products by name or description..."
+            placeholder="Search products by name, description, or category..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 text-xs bg-zinc-900 border border-zinc-800 rounded-2xl text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setSearchQuery('');
+            }}
+            className="w-full pl-10 pr-9 py-2.5 text-xs bg-zinc-900 border border-zinc-800 rounded-2xl text-white placeholder:text-zinc-500 focus:outline-none focus:border-amber-500"
           />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors p-0.5"
+              aria-label="Clear search"
+              type="button"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Category Filter */}

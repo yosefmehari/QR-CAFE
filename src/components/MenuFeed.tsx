@@ -30,29 +30,31 @@ export default function MenuFeed({ categories, allProducts }: MenuFeedProps) {
 
   // Sync table number from URL query parameter or localStorage
   useEffect(() => {
-    const tableParam = searchParams.get('table')
-    if (tableParam) {
-      const parsed = parseInt(tableParam, 10)
-      if (!isNaN(parsed) && parsed > 0) {
-        setTableNumber(parsed)
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('qr_cafe_table_number', String(parsed))
-          document.cookie = `qr_cafe_table_number=${parsed}; path=/; max-age=86400; SameSite=Lax`
-        }
-        return
-      }
-    }
-
-    // Fallback to local storage if no query param
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem('qr_cafe_table_number')
-      if (stored) {
-        const parsed = parseInt(stored, 10)
+    queueMicrotask(() => {
+      const tableParam = searchParams.get('table')
+      if (tableParam) {
+        const parsed = parseInt(tableParam, 10)
         if (!isNaN(parsed) && parsed > 0) {
           setTableNumber(parsed)
+          if (typeof window !== 'undefined') {
+            localStorage.setItem('qr_cafe_table_number', String(parsed))
+            document.cookie = `qr_cafe_table_number=${parsed}; path=/; max-age=86400; SameSite=Lax`
+          }
+          return
         }
       }
-    }
+
+      // Fallback to local storage if no query param
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem('qr_cafe_table_number')
+        if (stored) {
+          const parsed = parseInt(stored, 10)
+          if (!isNaN(parsed) && parsed > 0) {
+            setTableNumber(parsed)
+          }
+        }
+      }
+    })
   }, [searchParams])
 
   const handleClearTable = () => {
@@ -65,26 +67,55 @@ export default function MenuFeed({ categories, allProducts }: MenuFeedProps) {
     router.replace('/')
   }
 
+  // Handle search text change
+  const handleSearchChange = (query: string) => {
+    setSearchQuery(query)
+    if (query.trim().length > 0 && activeCategory !== 'all') {
+      setActiveCategory('all')
+    }
+  }
+
   // Compute products per category count for the category tabs
   const categoriesWithCounts = useMemo(() => {
-    return categories.map((cat) => ({
-      ...cat,
-      productCount: cat.products.length,
-    }))
-  }, [categories])
+    const cleanQuery = searchQuery.trim().toLowerCase()
+    const terms = cleanQuery.split(/\s+/).filter(Boolean)
+
+    return categories.map((cat) => {
+      const count =
+        terms.length === 0
+          ? cat.products.length
+          : cat.products.filter((p) =>
+              terms.every(
+                (term) =>
+                  p.name.toLowerCase().includes(term) ||
+                  (p.description && p.description.toLowerCase().includes(term))
+              )
+            ).length
+
+      return {
+        ...cat,
+        productCount: count,
+      }
+    })
+  }, [categories, searchQuery])
 
   // Filter products by both category and search query
   const filteredProducts = useMemo(() => {
+    const cleanQuery = searchQuery.trim().toLowerCase()
+    const terms = cleanQuery.split(/\s+/).filter(Boolean)
+
     return allProducts.filter((item) => {
       const matchesCategory =
         activeCategory === 'all' || item.category?.slug === activeCategory
 
-      const cleanQuery = searchQuery.trim().toLowerCase()
       const matchesSearch =
-        cleanQuery === '' ||
-        item.name.toLowerCase().includes(cleanQuery) ||
-        (item.description && item.description.toLowerCase().includes(cleanQuery)) ||
-        (item.category && item.category.name.toLowerCase().includes(cleanQuery))
+        terms.length === 0 ||
+        terms.every((term) =>
+          item.name.toLowerCase().includes(term) ||
+          (item.description && item.description.toLowerCase().includes(term)) ||
+          (item.category && item.category.name.toLowerCase().includes(term)) ||
+          (item.category && item.category.slug.toLowerCase().includes(term))
+        )
 
       return matchesCategory && matchesSearch
     })
@@ -104,7 +135,7 @@ export default function MenuFeed({ categories, allProducts }: MenuFeedProps) {
       {/* 2. Sticky Navigation Header */}
       <Header
         searchQuery={searchQuery}
-        onSearchChange={setSearchQuery}
+        onSearchChange={handleSearchChange}
         tableNumber={tableNumber}
       />
 
@@ -145,7 +176,9 @@ export default function MenuFeed({ categories, allProducts }: MenuFeedProps) {
           <div>
             <h2 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
               <span>
-                {activeCategory === 'all'
+                {searchQuery.trim()
+                  ? `Search: "${searchQuery}"`
+                  : activeCategory === 'all'
                   ? 'All Menu Items'
                   : `${currentCategoryObj?.emoji || ''} ${currentCategoryObj?.name || 'Category'}`}
               </span>

@@ -13,6 +13,7 @@ import {
   XCircle,
   RefreshCw,
   Sparkles,
+  Camera,
 } from 'lucide-react'
 
 export type OrderStatus =
@@ -39,6 +40,7 @@ export interface TrackedOrder {
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
+  paymentScreenshot?: string | null
   totalPrice: number
   notes?: string | null
   tableNumber: number
@@ -231,11 +233,48 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                   </div>
                 ) : (
                   <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-700 dark:text-amber-300 font-bold text-xs shrink-0 shadow-xs">
-                    <span>💵 Pay at Counter / Table</span>
+                    <span>
+                      {order.paymentMethod === 'BANK_TRANSFER'
+                        ? `🏦 ${order.paymentReference || 'Bank Transfer Pending'}`
+                        : '💵 Pay at Counter / Table'}
+                    </span>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Awaiting Admin Payment Check Notice */}
+            {order.paymentStatus !== 'PAID' && !isCancelled && (
+              <div className="mt-6 p-4 rounded-2xl bg-amber-500/10 border-2 border-amber-500/30 dark:border-amber-500/40 flex items-start gap-3 text-amber-900 dark:text-amber-200 animate-in fade-in duration-300">
+                <div className="w-9 h-9 rounded-xl bg-amber-500 text-zinc-950 flex items-center justify-center shrink-0 font-bold shadow-md shadow-amber-500/20">
+                  <Clock className="w-5 h-5 animate-spin" style={{ animationDuration: '3s' }} />
+                </div>
+                <div className="space-y-1 flex-1">
+                  <div className="flex items-center justify-between">
+                    <h4 className="font-extrabold text-sm text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                      <span>Wait, your payment is checking...</span>
+                    </h4>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400">
+                      Pending Admin Review
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-800/80 dark:text-amber-300/80 leading-relaxed">
+                    Our cafe admin is currently verifying your bank transfer / payment details. Once the admin clicks <strong>Checked</strong>, your order will automatically be confirmed and the kitchen will begin preparing your food.
+                  </p>
+                  {order.paymentReference && (
+                    <div className="pt-1 font-mono text-[11px] text-amber-700 dark:text-amber-400">
+                      Recorded Ref: <span className="font-bold underline">{order.paymentReference}</span>
+                    </div>
+                  )}
+                  {order.paymentScreenshot && (
+                    <div className="pt-1.5 flex items-center gap-1.5 text-[11px] text-emerald-700 dark:text-emerald-400 font-semibold">
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Payment receipt screenshot attached &amp; sent to admin</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Cancelled Alert Banner */}
             {isCancelled && (
@@ -323,6 +362,8 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                   ? 'Your meal has been served! Enjoy your visit.'
                   : isCancelled
                   ? 'Order is cancelled.'
+                  : order.paymentStatus !== 'PAID'
+                  ? 'Wait, your payment is checking... Please stay on this screen.'
                   : order.status === 'READY'
                   ? 'Plated! Server is bringing dishes to Table #' + order.tableNumber
                   : order.status === 'PREPARING'
@@ -334,6 +375,8 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
               <p className="text-xs text-zinc-500 mt-0.5">
                 {isCompleted
                   ? 'Need anything else? You can order more items anytime.'
+                  : order.paymentStatus !== 'PAID'
+                  ? 'The admin is verifying your transfer or counter payment. As soon as the admin clicks "Checked", your order unlocks.'
                   : 'This screen updates automatically as the kitchen changes order status.'}
               </p>
             </div>
