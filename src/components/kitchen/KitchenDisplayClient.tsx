@@ -30,17 +30,23 @@ export type KitchenOrderItem = {
 
 export type KitchenOrder = {
   id: string
-  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'SERVED' | 'CANCELLED'
+  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'SERVED' | 'CANCELLED'
+  orderType?: 'DINE_IN' | 'DELIVERY'
+  customerName?: string | null
+  customerPhone?: string | null
+  deliveryAddress?: string | null
+  deliveryNotes?: string | null
+  acceptedBy?: string | null
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
   totalPrice: number | string
   notes?: string | null
   createdAt: string
-  table: {
+  table?: {
     id: string
     number: number
-  }
+  } | null
   items: KitchenOrderItem[]
 }
 
@@ -379,10 +385,16 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
                     }`}
                   >
                     <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-3 py-1 rounded-xl bg-orange-500 text-white font-black text-sm tracking-wider shadow">
-                          TABLE {order.table.number}
-                        </span>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {order.orderType === 'DELIVERY' ? (
+                          <span className="px-3 py-1 rounded-xl bg-amber-500 text-white font-black text-xs sm:text-sm tracking-wider shadow">
+                            🛵 DELIVERY ({order.customerName || 'OUTSIDE'})
+                          </span>
+                        ) : (
+                          <span className="px-3 py-1 rounded-xl bg-orange-500 text-white font-black text-sm tracking-wider shadow">
+                            TABLE {order.table ? order.table.number : '?'}
+                          </span>
+                        )}
                         <span className="text-xs font-mono font-semibold text-zinc-400">
                           #{order.id.slice(-4).toUpperCase()}
                         </span>
@@ -396,6 +408,11 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
                           </span>
                         )}
                       </div>
+                      {order.deliveryAddress && (
+                        <div className="text-xs text-amber-300 font-semibold mt-1 flex items-center gap-1">
+                          <span>📍 {order.deliveryAddress}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-1.5 mt-2 text-xs">
                         <Clock className="w-3.5 h-3.5 text-zinc-500" />
                         <span
@@ -458,6 +475,16 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
                         key={item.id}
                         className="p-2.5 rounded-2xl bg-zinc-800/40 border border-zinc-800/80 flex items-start gap-3"
                       >
+                        {item.product.imageUrl && (
+                          <div className="w-10 h-10 rounded-xl overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700/60">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={item.product.imageUrl}
+                              alt={item.product.name}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        )}
                         <div className="w-8 h-8 rounded-xl bg-zinc-800 text-orange-400 font-extrabold text-sm flex items-center justify-center shrink-0 border border-zinc-700">
                           {item.quantity}x
                         </div>
@@ -524,7 +551,10 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
                     {order.status !== 'SERVED' && order.status !== 'CANCELLED' && (
                       <button
                         onClick={() => {
-                          if (confirm(`Cancel ticket for Table ${order.table.number}?`)) {
+                          const dest = order.orderType === 'DELIVERY'
+                            ? `Delivery #${order.id.slice(-4).toUpperCase()}`
+                            : `Table ${order.table ? order.table.number : '?'}`
+                          if (confirm(`Cancel ticket for ${dest}?`)) {
                             updateStatus(order.id, 'CANCELLED')
                           }
                         }}

@@ -36,17 +36,23 @@ export type JuiceOrderItem = {
 
 export type JuiceOrder = {
   id: string
-  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'SERVED' | 'CANCELLED'
+  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'SERVED' | 'CANCELLED'
+  orderType?: 'DINE_IN' | 'DELIVERY'
+  customerName?: string | null
+  customerPhone?: string | null
+  deliveryAddress?: string | null
+  deliveryNotes?: string | null
+  acceptedBy?: string | null
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
   totalPrice: number | string
   notes?: string | null
   createdAt: string
-  table: {
+  table?: {
     id: string
     number: number
-  }
+  } | null
   items: JuiceOrderItem[]
 }
 
@@ -457,12 +463,20 @@ export default function JuiceDisplayClient({ initialOrders }: JuiceDisplayClient
                 <div className="p-4 sm:p-5 border-b border-zinc-800/80 bg-zinc-950/40">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="w-9 h-9 rounded-2xl bg-emerald-500 text-zinc-950 font-black text-sm flex items-center justify-center shadow-md shadow-emerald-500/20">
-                        T{order.table.number}
-                      </span>
+                      {order.orderType === 'DELIVERY' ? (
+                        <span className="px-2.5 py-1.5 rounded-2xl bg-amber-500 text-zinc-950 font-black text-xs flex items-center justify-center shadow-md">
+                          🛵 DELIV
+                        </span>
+                      ) : (
+                        <span className="w-9 h-9 rounded-2xl bg-emerald-500 text-zinc-950 font-black text-sm flex items-center justify-center shadow-md shadow-emerald-500/20">
+                          T{order.table ? order.table.number : '?'}
+                        </span>
+                      )}
                       <div>
                         <span className="text-xs font-bold text-white tracking-wide">
-                          Table {order.table.number}
+                          {order.orderType === 'DELIVERY'
+                            ? `Delivery (${order.customerName || 'Outside'})`
+                            : `Table ${order.table ? order.table.number : '?'}`}
                         </span>
                         <div className="text-[10px] text-zinc-500">
                           #{order.id.slice(-6).toUpperCase()}
@@ -540,6 +554,16 @@ export default function JuiceDisplayClient({ initialOrders }: JuiceDisplayClient
                               }`}
                             >
                               <div className="flex items-center gap-3">
+                                {item.product.imageUrl && (
+                                  <div className="w-9 h-9 rounded-xl overflow-hidden bg-zinc-900 shrink-0 border border-zinc-700/60">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img
+                                      src={item.product.imageUrl}
+                                      alt={item.product.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </div>
+                                )}
                                 <span
                                   className={`w-7 h-7 rounded-xl font-black text-xs flex items-center justify-center ${
                                     isDone

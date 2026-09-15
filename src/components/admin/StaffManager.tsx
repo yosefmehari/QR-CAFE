@@ -15,13 +15,14 @@ import {
   Check,
   Coffee,
   Bell,
+  Bike,
 } from 'lucide-react'
 
 export interface AdminStaffUser {
   id: string
   name: string
   email: string
-  role: 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER'
+  role: 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER' | 'DELIVERY'
   createdAt: string
 }
 
@@ -39,7 +40,7 @@ export default function StaffManager({
   showToast,
 }: Props) {
   const [staff, setStaff] = useState<AdminStaffUser[]>(initialStaff)
-  const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER'>('ALL')
+  const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER' | 'DELIVERY'>('ALL')
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
   const [resetModalUser, setResetModalUser] = useState<AdminStaffUser | null>(null)
 
@@ -47,7 +48,7 @@ export default function StaffManager({
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [role, setRole] = useState<'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER'>('KITCHEN')
+  const [role, setRole] = useState<'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER' | 'DELIVERY'>('KITCHEN')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
@@ -192,7 +193,7 @@ export default function StaffManager({
 
       {/* Role Filter Tabs */}
       <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none">
-        {(['ALL', 'ADMIN', 'KITCHEN', 'JUICE_MAKER', 'WAITER'] as const).map((r) => (
+        {(['ALL', 'ADMIN', 'KITCHEN', 'JUICE_MAKER', 'WAITER', 'DELIVERY'] as const).map((r) => (
           <button
             key={r}
             onClick={() => setRoleFilter(r)}
@@ -210,7 +211,9 @@ export default function StaffManager({
                   ? 'Kitchen Chefs'
                   : r === 'JUICE_MAKER'
                     ? 'Juice Makers'
-                    : 'Waiters'}
+                    : r === 'WAITER'
+                      ? 'Waiters'
+                      : 'Delivery Drivers'}
           </button>
         ))}
       </div>
@@ -223,6 +226,7 @@ export default function StaffManager({
           const isKitchen = member.role === 'KITCHEN'
           const isJuice = member.role === 'JUICE_MAKER'
           const isWaiter = member.role === 'WAITER'
+          const isDelivery = member.role === 'DELIVERY'
 
           return (
             <div
@@ -236,6 +240,7 @@ export default function StaffManager({
                     {isKitchen && <ChefHat className="w-5 h-5 text-orange-400" />}
                     {isJuice && <Coffee className="w-5 h-5 text-fuchsia-400" />}
                     {isWaiter && <Bell className="w-5 h-5 text-cyan-400" />}
+                    {isDelivery && <Bike className="w-5 h-5 text-teal-400" />}
                   </div>
 
                   <div className="flex items-center gap-1.5">
@@ -247,12 +252,16 @@ export default function StaffManager({
                             ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
                             : isJuice
                               ? 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20'
-                              : 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                              : isWaiter
+                                ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                : 'bg-teal-500/10 text-teal-400 border-teal-500/20'
                       }`}
                     >
                       {member.role === 'JUICE_MAKER'
                         ? 'JUICE MAKER'
-                        : member.role}
+                        : member.role === 'DELIVERY'
+                          ? 'DELIVERY DRIVER'
+                          : member.role}
                     </span>
                     {isCurrentUser && (
                       <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -409,8 +418,21 @@ export default function StaffManager({
 
                   <button
                     type="button"
-                    onClick={() => setRole('ADMIN')}
+                    onClick={() => setRole('DELIVERY')}
                     className={`p-2.5 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all ${
+                      role === 'DELIVERY'
+                        ? 'bg-teal-500/20 border-teal-500 text-teal-400'
+                        : 'bg-zinc-950 border-zinc-800 text-zinc-400'
+                    }`}
+                  >
+                    <Bike className="w-4 h-4" />
+                    <span>Delivery Courier</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setRole('ADMIN')}
+                    className={`p-2.5 rounded-2xl border text-xs font-bold flex items-center justify-center gap-2 cursor-pointer transition-all col-span-2 ${
                       role === 'ADMIN'
                         ? 'bg-amber-500/20 border-amber-500 text-amber-400'
                         : 'bg-zinc-950 border-zinc-800 text-zinc-400'

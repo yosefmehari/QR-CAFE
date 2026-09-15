@@ -7,7 +7,7 @@ import { OrderStatus } from '@prisma/client'
 export async function GET(request: NextRequest) {
   try {
     const session = await getSession()
-    const allowedRoles = ['KITCHEN', 'JUICE_MAKER', 'WAITER', 'ADMIN']
+    const allowedRoles = ['KITCHEN', 'JUICE_MAKER', 'WAITER', 'DELIVERY', 'ADMIN']
     if (!session || !allowedRoles.includes(session.role)) {
       return NextResponse.json({ error: 'Unauthorized. Staff access required.' }, { status: 401 })
     }
@@ -23,6 +23,7 @@ export async function GET(request: NextRequest) {
         OrderStatus.CONFIRMED,
         OrderStatus.PREPARING,
         OrderStatus.READY,
+        OrderStatus.OUT_FOR_DELIVERY,
       ]
     } else if (view === 'history') {
       statusFilter = [OrderStatus.SERVED, OrderStatus.CANCELLED]

@@ -22,6 +22,9 @@ export async function requireAuth(allowedRoles?: UserRole[]): Promise<SessionPay
     if (session.role === 'WAITER') {
       redirect('/waiter')
     }
+    if (session.role === 'DELIVERY') {
+      redirect('/delivery')
+    }
     redirect('/admin')
   }
 

@@ -16,9 +16,14 @@ export async function GET(request: NextRequest) {
     const paymentStatus = searchParams.get('paymentStatus') as 'PAID' | 'PENDING' | 'REFUNDED' | null
     const tableNumber = searchParams.get('table')
     const search = searchParams.get('search')
+    const orderType = searchParams.get('orderType') as 'DINE_IN' | 'DELIVERY' | null
     const limit = Math.min(parseInt(searchParams.get('limit') || '50', 10), 100)
 
     const where: Prisma.OrderWhereInput = {}
+
+    if (orderType && ['DINE_IN', 'DELIVERY'].includes(orderType)) {
+      where.orderType = orderType
+    }
 
     if (status && Object.values(OrderStatus).includes(status)) {
       where.status = status
@@ -43,6 +48,9 @@ export async function GET(request: NextRequest) {
         { id: { contains: cleanSearch, mode: 'insensitive' } },
         { notes: { contains: cleanSearch, mode: 'insensitive' } },
         { paymentReference: { contains: cleanSearch, mode: 'insensitive' } },
+        { customerName: { contains: cleanSearch, mode: 'insensitive' } },
+        { customerPhone: { contains: cleanSearch, mode: 'insensitive' } },
+        { deliveryAddress: { contains: cleanSearch, mode: 'insensitive' } },
         {
           items: {
             some: {
@@ -89,6 +97,12 @@ export async function GET(request: NextRequest) {
     const serializedOrders = orders.map((o) => ({
       id: o.id,
       status: o.status,
+      orderType: o.orderType,
+      customerName: o.customerName,
+      customerPhone: o.customerPhone,
+      deliveryAddress: o.deliveryAddress,
+      deliveryNotes: o.deliveryNotes,
+      acceptedBy: o.acceptedBy,
       paymentMethod: o.paymentMethod,
       paymentStatus: o.paymentStatus,
       paymentReference: o.paymentReference,
@@ -96,10 +110,12 @@ export async function GET(request: NextRequest) {
       totalPrice: Number(o.totalPrice),
       notes: o.notes,
       createdAt: o.createdAt.toISOString(),
-      table: {
-        id: o.table.id,
-        number: o.table.number,
-      },
+      table: o.table
+        ? {
+            id: o.table.id,
+            number: o.table.number,
+          }
+        : null,
       items: o.items.map((i) => ({
         id: i.id,
         quantity: i.quantity,

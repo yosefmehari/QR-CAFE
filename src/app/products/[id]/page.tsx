@@ -64,20 +64,34 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
       <main className="max-w-4xl mx-auto px-4 py-8 sm:py-12">
         <div className="bg-white dark:bg-zinc-900/90 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 overflow-hidden shadow-xl shadow-zinc-200/40 dark:shadow-black/60">
           {/* Visual Header */}
-          <div className="w-full h-64 sm:h-80 bg-gradient-to-br from-amber-500/20 via-orange-500/15 to-red-500/10 flex flex-col items-center justify-center relative p-8">
-            <span className="text-8xl filter drop-shadow-md select-none">
-              {product.category?.emoji || '🍽️'}
-            </span>
+          <div className="w-full h-72 sm:h-96 bg-zinc-950 relative overflow-hidden flex items-center justify-center">
+            {product.imageUrl ? (
+              <img
+                src={product.imageUrl}
+                alt={product.name}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full bg-gradient-to-br from-amber-500/20 via-orange-500/15 to-red-500/10 flex items-center justify-center">
+                <span className="text-8xl filter drop-shadow-md select-none">
+                  {product.category?.emoji || '🍽️'}
+                </span>
+              </div>
+            )}
+
+            {/* Vignette overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/10 pointer-events-none" />
+
             {product.category && (
-              <span className="absolute top-6 left-6 px-3.5 py-1.5 rounded-full text-xs font-bold bg-white/90 dark:bg-zinc-950/80 backdrop-blur-md text-zinc-900 dark:text-zinc-100 shadow-sm">
+              <span className="absolute top-6 left-6 px-3.5 py-1.5 rounded-full text-xs font-bold bg-zinc-950/80 backdrop-blur-md text-white border border-white/10 shadow-sm">
                 {product.category.name}
               </span>
             )}
             <span
               className={`absolute top-6 right-6 px-3.5 py-1.5 rounded-full text-xs font-bold ${
                 product.isAvailable
-                  ? 'bg-emerald-500 text-white'
-                  : 'bg-rose-500 text-white'
+                  ? 'bg-emerald-500 text-white shadow-sm'
+                  : 'bg-rose-500 text-white shadow-sm'
               }`}
             >
               {product.isAvailable ? 'Available Now' : 'Sold Out'}

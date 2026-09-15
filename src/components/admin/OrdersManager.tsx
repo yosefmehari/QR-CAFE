@@ -13,6 +13,8 @@ import {
   CheckCircle2,
   Camera,
   ExternalLink,
+  MapPin,
+  Bike,
 } from 'lucide-react'
 
 export interface AdminOrderItem {
@@ -29,7 +31,13 @@ export interface AdminOrderItem {
 
 export interface AdminOrderRecord {
   id: string
-  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'SERVED' | 'CANCELLED'
+  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'SERVED' | 'CANCELLED'
+  orderType?: 'DINE_IN' | 'DELIVERY'
+  customerName?: string | null
+  customerPhone?: string | null
+  deliveryAddress?: string | null
+  deliveryNotes?: string | null
+  acceptedBy?: string | null
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
@@ -37,10 +45,10 @@ export interface AdminOrderRecord {
   totalPrice: number
   notes?: string | null
   createdAt: string
-  table: {
+  table?: {
     id: string
     number: number
-  }
+  } | null
   items: AdminOrderItem[]
 }
 
@@ -360,13 +368,24 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                     <tr key={order.id} className="hover:bg-zinc-800/30 transition-colors">
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-2.5">
-                          <span className="px-2.5 py-1 rounded-xl bg-amber-500 text-zinc-950 font-black text-xs">
-                            T-{order.table.number}
-                          </span>
+                          {order.orderType === 'DELIVERY' ? (
+                            <span className="px-2 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 font-black text-[10px] tracking-wider whitespace-nowrap">
+                              🛵 DELIV
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-1 rounded-xl bg-amber-500 text-zinc-950 font-black text-xs">
+                              T-{order.table ? order.table.number : '?'}
+                            </span>
+                          )}
                           <div>
                             <span className="font-mono font-bold text-white block">
                               #{order.id.slice(-6).toUpperCase()}
                             </span>
+                            {order.orderType === 'DELIVERY' && order.deliveryAddress && (
+                              <span className="text-[10px] text-amber-300 font-medium truncate max-w-[140px] block">
+                                📍 {order.deliveryAddress}
+                              </span>
+                            )}
                             {order.notes && (
                               <span className="text-[10px] text-amber-400/90 truncate max-w-[120px] block">
                                 💬 {order.notes}
@@ -496,9 +515,16 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
             {/* Modal Header */}
             <div className="p-5 bg-zinc-950/80 border-b border-zinc-800 flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <span className="px-3 py-1 rounded-xl bg-amber-500 text-zinc-950 font-black text-xs">
-                  TABLE {selectedOrder.table.number}
-                </span>
+                {selectedOrder.orderType === 'DELIVERY' ? (
+                  <span className="px-3 py-1 rounded-xl bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950 font-black text-xs flex items-center gap-1.5 shadow-sm">
+                    <Bike className="w-3.5 h-3.5" />
+                    OUTSIDE DELIVERY
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-xl bg-amber-500 text-zinc-950 font-black text-xs">
+                    TABLE {selectedOrder.table?.number ?? 'N/A'}
+                  </span>
+                )}
                 <div>
                   <h3 className="font-black text-white text-sm">
                     Order #{selectedOrder.id.slice(-6).toUpperCase()}
@@ -518,6 +544,58 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
 
             {/* Modal Content */}
             <div className="p-5 space-y-4 max-h-[60vh] overflow-y-auto">
+              {/* Delivery Details Banner */}
+              {selectedOrder.orderType === 'DELIVERY' && (
+                <div className="p-3.5 rounded-2xl bg-amber-500/10 border border-amber-500/20 space-y-2 text-xs">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-1.5 font-black text-amber-400 text-xs">
+                      <Bike className="w-4 h-4" />
+                      <span>Delivery Information</span>
+                    </div>
+                    {selectedOrder.acceptedBy ? (
+                      <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-md">
+                        Waiter: {selectedOrder.acceptedBy}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-2 py-0.5 rounded-md">
+                        Awaiting Waiter
+                      </span>
+                    )}
+                  </div>
+                  <div className="space-y-1 text-zinc-300">
+                    {selectedOrder.customerName && (
+                      <p>
+                        <span className="text-zinc-500 font-medium">Customer:</span>{' '}
+                        <span className="font-bold text-white">{selectedOrder.customerName}</span>
+                      </p>
+                    )}
+                    {selectedOrder.customerPhone && (
+                      <p>
+                        <span className="text-zinc-500 font-medium">Phone:</span>{' '}
+                        <a
+                          href={`tel:${selectedOrder.customerPhone}`}
+                          className="text-amber-400 font-mono font-bold hover:underline"
+                        >
+                          {selectedOrder.customerPhone}
+                        </a>
+                      </p>
+                    )}
+                    {selectedOrder.deliveryAddress && (
+                      <div className="flex items-start gap-1 text-zinc-200 mt-1">
+                        <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <span className="font-semibold text-white">{selectedOrder.deliveryAddress}</span>
+                      </div>
+                    )}
+                    {selectedOrder.deliveryNotes && (
+                      <p className="text-amber-200/90 text-[11px] bg-zinc-900/80 p-2 rounded-xl border border-amber-500/20 mt-1">
+                        <span className="font-bold text-amber-400">Directions/Notes:</span>{' '}
+                        {selectedOrder.deliveryNotes}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* Customer Notes Banner */}
               {selectedOrder.notes && (
                 <div className="p-3 rounded-2xl bg-amber-950/30 border border-amber-900/40 text-xs text-amber-300 flex items-start gap-2">
@@ -539,6 +617,16 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                     className="p-3 rounded-2xl bg-zinc-950/50 border border-zinc-800/80 flex items-start justify-between gap-3"
                   >
                     <div className="flex items-start gap-2.5">
+                      {item.product.imageUrl && (
+                        <div className="w-9 h-9 rounded-lg overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700/60">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={item.product.imageUrl}
+                            alt={item.product.name}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      )}
                       <span className="w-6 h-6 rounded-lg bg-zinc-800 text-amber-400 font-extrabold text-xs flex items-center justify-center shrink-0">
                         {item.quantity}x
                       </span>
@@ -655,7 +743,11 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                   Update Order Status
                 </label>
                 <div className="grid grid-cols-3 gap-2">
-                  {(['PENDING', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'] as const).map((st) => (
+                  {(
+                    selectedOrder.orderType === 'DELIVERY'
+                      ? (['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'OUT_FOR_DELIVERY', 'SERVED', 'CANCELLED'] as const)
+                      : (['PENDING', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'] as const)
+                  ).map((st) => (
                     <button
                       key={st}
                       onClick={() => updateOrderStatus(selectedOrder.id, st)}
@@ -666,7 +758,7 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                           : 'bg-zinc-800 text-zinc-400 hover:text-white hover:bg-zinc-700 border-zinc-700'
                       } disabled:opacity-40`}
                     >
-                      {st}
+                      {st.replace(/_/g, ' ')}
                     </button>
                   ))}
                 </div>

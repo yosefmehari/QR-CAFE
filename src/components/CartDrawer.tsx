@@ -24,6 +24,10 @@ import {
   Check,
   Camera,
   UploadCloud,
+  MapPin,
+  Bike,
+  Phone,
+  User,
 } from 'lucide-react'
 
 type PaymentMethodType = 'CARD' | 'BANK_TRANSFER' | 'APPLE_PAY' | 'CASH'
@@ -53,7 +57,12 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
     clearCart,
   } = useCart()
 
+  const [orderType, setOrderType] = useState<'DINE_IN' | 'DELIVERY'>('DINE_IN')
   const [tableInput, setTableInput] = useState<number | ''>(currentTableNumber || '')
+  const [customerName, setCustomerName] = useState('')
+  const [customerPhone, setCustomerPhone] = useState('')
+  const [deliveryAddress, setDeliveryAddress] = useState('')
+  const [deliveryNotes, setDeliveryNotes] = useState('')
   const [orderNotes, setOrderNotes] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -81,7 +90,7 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
 
   const [prevTableNumber, setPrevTableNumber] = useState(currentTableNumber)
 
-  // Fetch cafe bank settings on mount
+  // Fetch cafe bank settings on mount & restore customer details
   useEffect(() => {
     fetch('/api/settings')
       .then((res) => (res.ok ? res.json() : null))
@@ -89,13 +98,30 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
         if (data) setCafeSettings(data)
       })
       .catch((err) => console.error('Failed to load bank settings', err))
-  }, [])
+
+    if (typeof window !== 'undefined') {
+      const savedName = localStorage.getItem('qr_cafe_customer_name')
+      const savedPhone = localStorage.getItem('qr_cafe_customer_phone')
+      const savedAddress = localStorage.getItem('qr_cafe_delivery_address')
+      if (savedName) setCustomerName(savedName)
+      if (savedPhone) setCustomerPhone(savedPhone)
+      if (savedAddress) setDeliveryAddress(savedAddress)
+
+      const savedTable = localStorage.getItem('qr_cafe_table_number')
+      if (!currentTableNumber && !savedTable) {
+        setOrderType('DELIVERY')
+      } else if (currentTableNumber || savedTable) {
+        setOrderType('DINE_IN')
+      }
+    }
+  }, [currentTableNumber])
 
   // Sync internal tableInput with context
   if (currentTableNumber !== prevTableNumber) {
     setPrevTableNumber(currentTableNumber)
     if (currentTableNumber) {
       setTableInput(currentTableNumber)
+      setOrderType('DINE_IN')
     }
   }
 
@@ -180,9 +206,30 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
 
     const finalTable = typeof tableInput === 'number' ? tableInput : null
 
-    if (!finalTable || finalTable <= 0) {
-      setErrorMessage('Please enter a valid dining table number (e.g. Table 1, Table 2).')
-      return
+    if (orderType === 'DINE_IN') {
+      if (!finalTable || finalTable <= 0) {
+        setErrorMessage('Please enter a valid dining table number (e.g. Table 1, Table 2).')
+        return
+      }
+    } else {
+      if (!deliveryAddress.trim() || deliveryAddress.trim().length < 3) {
+        setErrorMessage('Please provide your delivery address or location (e.g. office, room, or landmark).')
+        return
+      }
+      if (!customerPhone.trim() || customerPhone.trim().length < 5) {
+        setErrorMessage('Please enter your phone number so our waiter can coordinate your delivery.')
+        return
+      }
+      if (!customerName.trim() || customerName.trim().length < 2) {
+        setErrorMessage('Please enter your name for delivery.')
+        return
+      }
+
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('qr_cafe_customer_name', customerName.trim())
+        localStorage.setItem('qr_cafe_customer_phone', customerPhone.trim())
+        localStorage.setItem('qr_cafe_delivery_address', deliveryAddress.trim())
+      }
     }
 
     if (items.length === 0) {
@@ -293,7 +340,12 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          tableNumber: finalTable,
+          orderType,
+          tableNumber: orderType === 'DINE_IN' ? finalTable : undefined,
+          customerName: orderType === 'DELIVERY' ? customerName.trim() : undefined,
+          customerPhone: orderType === 'DELIVERY' ? customerPhone.trim() : undefined,
+          deliveryAddress: orderType === 'DELIVERY' ? deliveryAddress.trim() : undefined,
+          deliveryNotes: orderType === 'DELIVERY' ? deliveryNotes.trim() : undefined,
           notes: orderNotes.trim() || undefined,
           paymentMethod,
           paymentScreenshot: finalScreenshotUrl || undefined,
@@ -381,34 +433,150 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
 
         {/* Drawer Body */}
         <div className="flex-1 overflow-y-auto p-5 space-y-6">
-          {/* Table Verification Bar */}
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <UtensilsCrossed className="w-4 h-4 text-amber-600" />
-                <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                  Dine-In Table Number
-                </span>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs text-zinc-500 font-medium">Table #</span>
-                <input
-                  type="number"
-                  min="1"
-                  max="50"
-                  value={tableInput}
-                  onChange={(e) => {
-                    const val = e.target.value ? parseInt(e.target.value, 10) : ''
-                    setTableInput(val)
-                  }}
-                  placeholder="e.g. 3"
-                  className="w-16 px-2 py-1 text-center font-bold text-sm bg-white dark:bg-zinc-900 border border-amber-400 rounded-lg focus:outline-none"
-                />
-              </div>
+          {/* Order Mode Selector: Dine-In vs Outside Delivery */}
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 p-1 bg-zinc-100 dark:bg-zinc-900 rounded-2xl border border-zinc-200 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => setOrderType('DINE_IN')}
+                className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  orderType === 'DINE_IN'
+                    ? 'bg-white dark:bg-zinc-800 text-zinc-950 dark:text-white shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                <UtensilsCrossed className="w-3.5 h-3.5 text-amber-500" />
+                <span>Dine-In Table</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setOrderType('DELIVERY')}
+                className={`py-2 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
+                  orderType === 'DELIVERY'
+                    ? 'bg-amber-500 text-white shadow-xs'
+                    : 'text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200'
+                }`}
+              >
+                <Bike className="w-3.5 h-3.5" />
+                <span>Outside Delivery</span>
+              </button>
             </div>
-            <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-1.5">
-              The kitchen delivers directly to this table.
-            </p>
+
+            {/* If Dine-In */}
+            {orderType === 'DINE_IN' ? (
+              <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-500/20">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <UtensilsCrossed className="w-4 h-4 text-amber-600" />
+                    <span className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
+                      Dine-In Table Number
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs text-zinc-500 font-medium">Table #</span>
+                    <input
+                      type="number"
+                      min="1"
+                      max="50"
+                      value={tableInput}
+                      onChange={(e) => {
+                        const val = e.target.value ? parseInt(e.target.value, 10) : ''
+                        setTableInput(val)
+                      }}
+                      placeholder="e.g. 3"
+                      className="w-16 px-2 py-1 text-center font-bold text-sm bg-white dark:bg-zinc-900 border border-amber-400 rounded-lg focus:outline-none"
+                    />
+                  </div>
+                </div>
+                <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 mt-1.5">
+                  The kitchen delivers directly to your cafe table.
+                </p>
+              </div>
+            ) : (
+              /* If Outside Delivery */
+              <div className="p-4 rounded-2xl bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/25 space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4" />
+                    <span>Outside Delivery Details</span>
+                  </span>
+                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-700 dark:text-amber-300 font-bold">
+                    No Table Needed
+                  </span>
+                </div>
+
+                <div className="space-y-2.5">
+                  <div>
+                    <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                      Where is your place? (Address / Location) *
+                    </label>
+                    <div className="relative">
+                      <MapPin className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
+                      <input
+                        type="text"
+                        placeholder="e.g. Office #302, Sunlight Tower or Across the street, bench #2"
+                        value={deliveryAddress}
+                        onChange={(e) => setDeliveryAddress(e.target.value)}
+                        className="w-full pl-8 pr-3 py-2 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:border-amber-500 font-medium"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                        Your Name *
+                      </label>
+                      <div className="relative">
+                        <User className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
+                        <input
+                          type="text"
+                          placeholder="e.g. Alex"
+                          value={customerName}
+                          onChange={(e) => setCustomerName(e.target.value)}
+                          className="w-full pl-8 pr-2.5 py-2 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[11px] font-bold text-zinc-700 dark:text-zinc-300 mb-1">
+                        Phone Number *
+                      </label>
+                      <div className="relative">
+                        <Phone className="w-3.5 h-3.5 text-zinc-400 absolute left-3 top-2.5" />
+                        <input
+                          type="tel"
+                          placeholder="0911234567"
+                          value={customerPhone}
+                          onChange={(e) => setCustomerPhone(e.target.value)}
+                          className="w-full pl-8 pr-2.5 py-2 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:border-amber-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-medium text-zinc-600 dark:text-zinc-400 mb-1">
+                      Delivery Directions / Notes (Optional)
+                    </label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Near blue gate, 2nd floor, call on arrival"
+                      value={deliveryNotes}
+                      onChange={(e) => setDeliveryNotes(e.target.value)}
+                      className="w-full px-3 py-2 text-xs bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-none focus:border-amber-500"
+                    />
+                  </div>
+                </div>
+
+                <p className="text-[11px] text-amber-800/80 dark:text-amber-300/80 flex items-center gap-1.5 pt-0.5">
+                  <Check className="w-3 h-3 text-amber-600 shrink-0" />
+                  <span>Our waiter will accept your order and deliver straight to your address.</span>
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Items List or Empty State */}
@@ -448,8 +616,16 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
                     className="p-3 rounded-2xl bg-zinc-50 dark:bg-zinc-900/60 border border-zinc-200 dark:border-zinc-800 flex items-start gap-3 relative group"
                   >
                     {/* Item Thumbnail */}
-                    <div className="w-14 h-14 rounded-xl bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center text-2xl select-none shrink-0">
-                      {item.emoji || '🍽️'}
+                    <div className="w-14 h-14 rounded-xl bg-zinc-200 dark:bg-zinc-800 overflow-hidden shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-zinc-700/60">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-2xl select-none">{item.emoji || '🍽️'}</span>
+                      )}
                     </div>
 
                     {/* Item Information */}
@@ -860,14 +1036,16 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
                 </div>
               )}
 
-              {/* Cash at Counter Notice */}
+              {/* Cash Notice */}
               {paymentMethod === 'CASH' && (
                 <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900/40 text-center space-y-1">
                   <p className="text-xs font-bold text-amber-800 dark:text-amber-300">
-                    Pay at Table or Counter
+                    {orderType === 'DELIVERY' ? 'Cash on Delivery' : 'Pay at Table or Counter'}
                   </p>
                   <p className="text-[11px] text-amber-700/80 dark:text-amber-400/80">
-                    Our waitstaff will bring your order and collect cash or card at Table #{tableInput || '?'}.
+                    {orderType === 'DELIVERY'
+                      ? 'Our waiter / courier will bring your order to your address and collect cash upon arrival.'
+                      : `Our waitstaff will bring your order and collect cash or card at Table #${tableInput || '?'}.`}
                   </p>
                 </div>
               )}
@@ -924,8 +1102,12 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
                     {paymentMethod === 'BANK_TRANSFER'
                       ? `Confirm Transfer ($${totalPrice.toFixed(2)}) & Place Order`
                       : paymentMethod === 'CASH'
-                        ? `Place Order for Table #${tableInput || '?'} (Pay at Counter)`
-                        : `Pay $${totalPrice.toFixed(2)} & Order for Table #${tableInput || '?'}`}
+                        ? orderType === 'DELIVERY'
+                          ? `Order for Delivery ($${totalPrice.toFixed(2)} Cash on Delivery)`
+                          : `Place Order for Table #${tableInput || '?'} (Pay at Counter)`
+                        : orderType === 'DELIVERY'
+                          ? `Pay $${totalPrice.toFixed(2)} & Order Delivery`
+                          : `Pay $${totalPrice.toFixed(2)} & Order for Table #${tableInput || '?'}`}
                   </span>
                   <ArrowRight className="w-4 h-4" />
                 </>

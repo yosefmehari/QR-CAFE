@@ -10,6 +10,7 @@ export interface CartItem {
   price: number
   quantity: number
   notes?: string
+  imageUrl?: string | null
   emoji?: string | null
 }
 
@@ -96,6 +97,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           price: priceNum,
           quantity,
           notes: trimmedNotes || undefined,
+          imageUrl: product.imageUrl || null,
           emoji: product.category?.emoji || '🍽️',
         },
       ]

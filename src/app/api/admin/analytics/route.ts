@@ -51,6 +51,7 @@ export async function GET() {
       CONFIRMED: 0,
       PREPARING: 0,
       READY: 0,
+      OUT_FOR_DELIVERY: 0,
       SERVED: 0,
       CANCELLED: 0,
     }
@@ -63,8 +64,10 @@ export async function GET() {
     // Table activity
     const tableActivityMap: Record<number, number> = {}
     orders.forEach((o) => {
-      const num = o.table.number
-      tableActivityMap[num] = (tableActivityMap[num] || 0) + 1
+      if (o.table) {
+        const num = o.table.number
+        tableActivityMap[num] = (tableActivityMap[num] || 0) + 1
+      }
     })
 
     const tableRankings = Object.entries(tableActivityMap)

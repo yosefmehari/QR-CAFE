@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
     }
 
     const hashedPassword = await bcrypt.hash(password.trim(), 10)
-    const allowedRoles = ['ADMIN', 'KITCHEN', 'JUICE_MAKER', 'WAITER']
+    const allowedRoles = ['ADMIN', 'KITCHEN', 'JUICE_MAKER', 'WAITER', 'DELIVERY']
     const validRole = allowedRoles.includes(role) ? role : 'KITCHEN'
 
     const newUser = await db.user.create({

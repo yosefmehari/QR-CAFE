@@ -1,43 +1,39 @@
 import { requireAuth } from '@/lib/authGuard'
 import Link from 'next/link'
 import LogoutButton from '@/components/LogoutButton'
-import { CupSoda, ChefHat, Bell, ShieldCheck } from 'lucide-react'
+import { Bike, ChefHat, CupSoda, Bell, ShieldCheck } from 'lucide-react'
 import prisma from '@/lib/db'
 import { OrderStatus } from '@prisma/client'
-import JuiceDisplayClient, { JuiceOrder } from '@/components/juice/JuiceDisplayClient'
+import DeliveryDisplayClient, { DeliveryOrder } from '@/components/delivery/DeliveryDisplayClient'
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Juice Bar & Beverage Display | Aroma & Fork Cafe',
-  description: 'Live beverage & juice fulfillment queue for the juice maker and barista team.',
+  title: 'Delivery Courier Station | Aroma & Fork Cafe',
+  description: 'Live order dispatch and notification station for delivery staff.',
 }
 
 export const dynamic = 'force-dynamic'
 export const revalidate = 0
 
-export default async function JuiceDashboardPage() {
-  // Allows both JUICE_MAKER staff and ADMIN users
-  const session = await requireAuth(['JUICE_MAKER', 'ADMIN'])
+export default async function DeliveryDashboardPage() {
+  // Allows DELIVERY courier and ADMIN users
+  const session = await requireAuth(['DELIVERY', 'ADMIN'])
 
-  // Fetch initial active tickets directly from PostgreSQL
+  // Fetch active delivery tickets
   const activeOrders = await prisma.order.findMany({
     where: {
+      orderType: 'DELIVERY',
       status: {
         in: [
           OrderStatus.PENDING,
           OrderStatus.CONFIRMED,
           OrderStatus.PREPARING,
           OrderStatus.READY,
+          OrderStatus.OUT_FOR_DELIVERY,
         ],
       },
     },
     include: {
-      table: {
-        select: {
-          id: true,
-          number: true,
-        },
-      },
       items: {
         include: {
           product: {
@@ -58,14 +54,14 @@ export default async function JuiceDashboardPage() {
       },
     },
     orderBy: {
-      createdAt: 'asc', // FIFO priority
+      createdAt: 'asc', // FIFO: oldest first
     },
   })
 
-  // Format Prisma Decimals and Dates for Client Component serialization
-  const initialOrders: JuiceOrder[] = activeOrders.map((order) => ({
+  // Serialize Decimals and Dates for Client Component
+  const initialOrders: DeliveryOrder[] = activeOrders.map((order) => ({
     id: order.id,
-    status: order.status as JuiceOrder['status'],
+    status: order.status as DeliveryOrder['status'],
     orderType: order.orderType,
     customerName: order.customerName,
     customerPhone: order.customerPhone,
@@ -78,12 +74,7 @@ export default async function JuiceDashboardPage() {
     totalPrice: order.totalPrice.toNumber(),
     notes: order.notes,
     createdAt: order.createdAt.toISOString(),
-    table: order.table
-      ? {
-          id: order.table.id,
-          number: order.table.number,
-        }
-      : null,
+    table: null,
     items: order.items.map((item) => ({
       id: item.id,
       quantity: item.quantity,
@@ -106,24 +97,24 @@ export default async function JuiceDashboardPage() {
 
   return (
     <div className="min-h-screen bg-zinc-950 text-zinc-100 flex flex-col">
-      {/* Top Juice Bar Navbar */}
+      {/* Top Delivery Navbar */}
       <header className="sticky top-0 z-30 bg-zinc-900/90 backdrop-blur-md border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 h-16 sm:h-20 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-500 to-teal-400 text-zinc-950 flex items-center justify-center shadow-lg shadow-emerald-500/20 font-black">
-              <CupSoda className="w-5 h-5" />
+            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-amber-500 to-orange-500 text-zinc-950 flex items-center justify-center shadow-lg shadow-amber-500/20 font-black">
+              <Bike className="w-5 h-5 text-zinc-950" />
             </div>
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-black text-base sm:text-lg text-white tracking-tight">
-                  Juice &amp; Beverage Bar
+                  Delivery Courier Station
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                  {session.role === 'JUICE_MAKER' ? 'Juice Maker' : session.role}
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-zinc-950">
+                  {session.role === 'DELIVERY' ? 'Courier' : session.role}
                 </span>
               </div>
               <p className="text-xs text-zinc-400 hidden sm:block">
-                Station: {session.name} ({session.email})
+                Courier: {session.name} ({session.email})
               </p>
             </div>
           </div>
@@ -146,6 +137,13 @@ export default async function JuiceDashboardPage() {
                   Kitchen
                 </Link>
                 <Link
+                  href="/juice"
+                  className="px-2.5 py-1 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white flex items-center gap-1 hover:bg-zinc-700 transition-colors"
+                >
+                  <CupSoda className="w-3.5 h-3.5 text-emerald-400" />
+                  Juice
+                </Link>
+                <Link
                   href="/waiter"
                   className="px-2.5 py-1 rounded-xl text-xs font-semibold text-zinc-300 hover:text-white flex items-center gap-1 hover:bg-zinc-700 transition-colors"
                 >
@@ -165,9 +163,9 @@ export default async function JuiceDashboardPage() {
         </div>
       </header>
 
-      {/* Main Juice Station Workspace */}
+      {/* Main Delivery Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <JuiceDisplayClient initialOrders={initialOrders} />
+        <DeliveryDisplayClient initialOrders={initialOrders} courierName={session.name} />
       </main>
     </div>
   )

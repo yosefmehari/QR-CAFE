@@ -54,11 +54,13 @@ export async function POST(request: NextRequest) {
     const redirectUrl =
       user.role === 'ADMIN'
         ? '/admin'
-        : user.role === 'WAITER'
-          ? '/waiter'
-          : user.role === 'JUICE_MAKER'
-            ? '/juice'
-            : '/kitchen'
+        : user.role === 'DELIVERY'
+          ? '/delivery'
+          : user.role === 'WAITER'
+            ? '/waiter'
+            : user.role === 'JUICE_MAKER'
+              ? '/juice'
+              : '/kitchen'
 
     return NextResponse.json({
       success: true,

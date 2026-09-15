@@ -223,6 +223,20 @@ export default function StaffPortalPage() {
                 <div className="font-bold text-white">Waiter Staff</div>
                 <div className="text-[10px] text-zinc-500 truncate">waiter@qrcafe.dev</div>
               </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setEmail('delivery@qrcafe.dev')
+                  setErrorMessage(null)
+                }}
+                className="p-2.5 rounded-xl bg-zinc-950/80 border border-zinc-800 text-[11px] text-zinc-400 hover:text-teal-400 hover:border-teal-500/30 transition-all text-center cursor-pointer col-span-2"
+              >
+                <div className="font-bold text-teal-400 flex items-center justify-center gap-1.5">
+                  <span>🛵 Delivery Courier</span>
+                </div>
+                <div className="text-[10px] text-zinc-500 truncate">delivery@qrcafe.dev</div>
+              </button>
             </div>
           </div>
         </div>

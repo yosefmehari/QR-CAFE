@@ -26,6 +26,8 @@ async function main() {
     { name: 'Cook Sarah', email: 'linecook@qrcafe.com', role: 'KITCHEN' as const },
     { name: 'Juice Master Leo', email: 'juice@qrcafe.dev', role: 'JUICE_MAKER' as const },
     { name: 'Head Waiter Alex', email: 'waiter@qrcafe.dev', role: 'WAITER' as const },
+    { name: 'Delivery Courier Dawit', email: 'delivery@qrcafe.dev', role: 'DELIVERY' as const },
+    { name: 'Delivery Rider Sam', email: 'delivery@qrcafe.com', role: 'DELIVERY' as const },
   ]
 
   for (const user of staffUsers) {
@@ -69,18 +71,21 @@ async function main() {
       description: 'Juicy 100% Angus beef patty with fresh lettuce, cheddar cheese, ripe tomato, and house relish.',
       price: 11.99,
       categorySlug: 'burgers',
+      imageUrl: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Chicken Burger',
       description: 'Crispy fried chicken breast fillet topped with creamy coleslaw, spicy mayo, and pickles.',
       price: 10.99,
       categorySlug: 'burgers',
+      imageUrl: 'https://images.unsplash.com/photo-1625813506062-0aeb1d7a094b?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Veggie Truffle Burger',
       description: 'Plant-based artisan patty with sautéed mushrooms, melted provolone, and truffle aioli.',
       price: 12.49,
       categorySlug: 'burgers',
+      imageUrl: 'https://images.unsplash.com/photo-1520072959219-c595dc870360?w=800&auto=format&fit=crop&q=80',
     },
 
     // Pizza
@@ -89,18 +94,21 @@ async function main() {
       description: 'Classic Neapolitan style pizza with San Marzano tomato sauce, fresh buffalo mozzarella, and basil.',
       price: 13.5,
       categorySlug: 'pizza',
+      imageUrl: 'https://images.unsplash.com/photo-1604382355076-af4b0eb60143?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Pepperoni Supreme Pizza',
       description: 'Crispy artisan crust loaded with cured pepperoni, spicy chili flakes, and shredded mozzarella.',
       price: 15.99,
       categorySlug: 'pizza',
+      imageUrl: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Truffle & Mushroom Pizza',
       description: 'White base pizza with wild woodland mushrooms, creamy fior di latte, and aromatic white truffle oil.',
       price: 16.5,
       categorySlug: 'pizza',
+      imageUrl: 'https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop&q=80',
     },
 
     // Drinks
@@ -109,18 +117,21 @@ async function main() {
       description: 'Classic ice-cold Coca-Cola served with lemon slice and fresh mint leaves.',
       price: 2.99,
       categorySlug: 'drinks',
+      imageUrl: 'https://images.unsplash.com/photo-1622483767028-3f66f32aef97?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Fresh Orange Juice',
       description: '100% pure freshly squeezed Valencia oranges served chilled.',
       price: 4.5,
       categorySlug: 'drinks',
+      imageUrl: 'https://images.unsplash.com/photo-1600271886742-f049cd451bba?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Sparkling Mineral Water',
       description: 'Chilled premium sparkling water with lime wedge.',
       price: 3.0,
       categorySlug: 'drinks',
+      imageUrl: 'https://images.unsplash.com/photo-1559839914-1b34645a380e?w=800&auto=format&fit=crop&q=80',
     },
 
     // Coffee
@@ -129,18 +140,21 @@ async function main() {
       description: 'Rich double espresso topped with silky smooth microfoam and a dusting of cocoa.',
       price: 4.25,
       categorySlug: 'coffee',
+      imageUrl: 'https://images.unsplash.com/photo-1534778101976-62847782c213?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Espresso',
       description: 'Pure double shot of specialty Arabica blend roasted to perfection.',
       price: 3.25,
       categorySlug: 'coffee',
+      imageUrl: 'https://images.unsplash.com/photo-1510591509098-f4fdc6d0ff04?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Iced Caramel Latte',
       description: 'Espresso poured over chilled oat milk, Madagascar vanilla, and drizzled with artisan caramel.',
       price: 5.25,
       categorySlug: 'coffee',
+      imageUrl: 'https://images.unsplash.com/photo-1517701604599-bb29b565090c?w=800&auto=format&fit=crop&q=80',
     },
 
     // Desserts
@@ -149,18 +163,21 @@ async function main() {
       description: 'Decadent multi-layered Belgian dark chocolate fudge cake with ganache frosting.',
       price: 6.99,
       categorySlug: 'desserts',
+      imageUrl: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'New York Cheesecake',
       description: 'Creamy classic baked cheesecake served with a raspberry coulis drizzle.',
       price: 6.5,
       categorySlug: 'desserts',
+      imageUrl: 'https://images.unsplash.com/photo-1533134242443-d4fd215305ad?w=800&auto=format&fit=crop&q=80',
     },
     {
       name: 'Tiramisu Classico',
       description: 'Traditional Italian espresso-soaked savoiardi biscuits layered with mascarpone cream.',
       price: 7.25,
       categorySlug: 'desserts',
+      imageUrl: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=800&auto=format&fit=crop&q=80',
     },
   ]
 
@@ -171,6 +188,7 @@ async function main() {
         description: item.description,
         price: item.price,
         categoryId: createdCategories[item.categorySlug],
+        imageUrl: item.imageUrl,
         isAvailable: true,
       },
     })

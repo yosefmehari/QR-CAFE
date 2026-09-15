@@ -1,7 +1,9 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { UtensilsCrossed, QrCode, X } from 'lucide-react'
+import { UtensilsCrossed, QrCode, X, Bike, MapPin } from 'lucide-react'
+import { useCart } from '@/context/CartContext'
 
 interface TableBannerProps {
   tableNumber: number | null
@@ -9,6 +11,16 @@ interface TableBannerProps {
 }
 
 export default function TableBanner({ tableNumber, onClearTable }: TableBannerProps) {
+  const { openCart } = useCart()
+  const [deliveryAddress, setDeliveryAddress] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('qr_cafe_delivery_address')
+      if (saved) setDeliveryAddress(saved)
+    }
+  }, [])
+
   if (tableNumber) {
     return (
       <div className="bg-emerald-500 text-white py-2.5 px-4 shadow-sm transition-all animate-in slide-in-from-top-2 duration-200">
@@ -50,20 +62,44 @@ export default function TableBanner({ tableNumber, onClearTable }: TableBannerPr
   }
 
   return (
-    <div className="bg-zinc-900 dark:bg-zinc-950 text-zinc-200 py-2.5 px-4 text-xs">
-      <div className="max-w-6xl mx-auto flex items-center justify-between gap-3">
+    <div className="bg-zinc-900 dark:bg-zinc-950 text-zinc-200 py-2.5 px-4 text-xs border-b border-zinc-800">
+      <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2.5">
         <div className="flex items-center gap-2 text-zinc-300">
-          <QrCode className="w-4 h-4 text-amber-500" />
+          <Bike className="w-4 h-4 text-amber-500 shrink-0" />
           <span>
-            Sitting at a table? Scan the physical QR code on your table to link your seat.
+            {deliveryAddress ? (
+              <span className="flex items-center gap-1.5 flex-wrap">
+                <span>Delivering outside to:</span>
+                <span className="font-bold text-amber-400 max-w-[200px] sm:max-w-xs truncate inline-block">
+                  {deliveryAddress}
+                </span>
+              </span>
+            ) : (
+              <span>
+                Ordering from outside? Tell us your address and our waiter will deliver right to you!
+              </span>
+            )}
           </span>
         </div>
-        <Link
-          href="/tables"
-          className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white shrink-0 transition-colors"
-        >
-          <span>Select Table</span>
-        </Link>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={openCart}
+            className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white transition-colors cursor-pointer"
+          >
+            <MapPin className="w-3 h-3" />
+            <span>{deliveryAddress ? 'Change Delivery Info' : 'Order for Delivery'}</span>
+          </button>
+
+          <Link
+            href="/tables"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-medium bg-zinc-800 hover:bg-zinc-700 text-zinc-300 hover:text-white border border-zinc-700 transition-colors"
+          >
+            <QrCode className="w-3 h-3 text-amber-400" />
+            <span>At a Table?</span>
+          </Link>
+        </div>
       </div>
     </div>
   )

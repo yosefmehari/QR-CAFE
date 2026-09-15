@@ -40,15 +40,32 @@ export default function ProductCard({ product, onOpenDetails }: ProductCardProps
       className="group relative flex flex-col bg-white dark:bg-zinc-900/90 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 p-4 sm:p-5 hover:shadow-xl hover:shadow-zinc-200/50 dark:hover:shadow-black/60 hover:-translate-y-1 transition-all duration-300 cursor-pointer overflow-hidden"
     >
       {/* Visual Header / Banner */}
-      <div
-        className={`w-full h-36 sm:h-44 rounded-2xl bg-gradient-to-br ${getGradientForCategory(
-          categorySlug
-        )} flex flex-col items-center justify-center relative overflow-hidden mb-4 transition-transform group-hover:scale-[1.01]`}
-      >
+      <div className="w-full h-40 sm:h-48 rounded-2xl bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden mb-4">
+        {product.imageUrl ? (
+          <img
+            src={product.imageUrl}
+            alt={product.name}
+            loading="lazy"
+            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+          />
+        ) : (
+          <div
+            className={`w-full h-full bg-gradient-to-br ${getGradientForCategory(
+              categorySlug
+            )} flex flex-col items-center justify-center`}
+          >
+            <span className="text-4xl sm:text-5xl select-none filter drop-shadow-sm group-hover:scale-110 transition-transform duration-300">
+              {product.category?.emoji || '🍽️'}
+            </span>
+          </div>
+        )}
+
+        {/* Soft bottom vignette for contrast */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20 pointer-events-none" />
+
         {/* Category tag pill */}
         {product.category && (
-          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-xs font-semibold bg-white/90 dark:bg-zinc-950/80 backdrop-blur-sm border border-zinc-200/50 dark:border-zinc-800 text-zinc-800 dark:text-zinc-200 flex items-center gap-1.5 shadow-xs">
-            <span>{product.category.emoji}</span>
+          <div className="absolute top-3 left-3 px-2.5 py-1 rounded-full text-[11px] font-bold bg-zinc-950/70 backdrop-blur-md border border-white/10 text-white flex items-center gap-1.5 shadow-sm">
             <span>{product.category.name}</span>
           </div>
         )}
@@ -60,17 +77,10 @@ export default function ProductCard({ product, onOpenDetails }: ProductCardProps
           </div>
         )}
 
-        {/* Center illustration icon / emoji */}
-        <div className="flex flex-col items-center gap-2 text-zinc-400 group-hover:scale-110 transition-transform duration-300">
-          <span className="text-4xl sm:text-5xl select-none filter drop-shadow-sm">
-            {product.category?.emoji || '🍽️'}
-          </span>
-        </div>
-
         {/* Quick view hover button overlay */}
-        <div className="absolute inset-0 bg-black/20 dark:bg-black/40 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-          <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-lg">
-            <Eye className="w-3.5 h-3.5" /> Quick View
+        <div className="absolute inset-0 bg-black/30 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+          <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white dark:bg-zinc-900 text-xs font-bold text-zinc-900 dark:text-zinc-100 shadow-xl">
+            <Eye className="w-3.5 h-3.5" /> View Photo &amp; Details
           </span>
         </div>
       </div>

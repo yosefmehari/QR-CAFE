@@ -59,16 +59,24 @@ export default async function KitchenDashboardPage() {
   const initialOrders: KitchenOrder[] = activeOrders.map((order) => ({
     id: order.id,
     status: order.status as KitchenOrder['status'],
+    orderType: order.orderType,
+    customerName: order.customerName,
+    customerPhone: order.customerPhone,
+    deliveryAddress: order.deliveryAddress,
+    deliveryNotes: order.deliveryNotes,
+    acceptedBy: order.acceptedBy,
     paymentMethod: order.paymentMethod,
     paymentStatus: order.paymentStatus,
     paymentReference: order.paymentReference,
     totalPrice: order.totalPrice.toNumber(),
     notes: order.notes,
     createdAt: order.createdAt.toISOString(),
-    table: {
-      id: order.table.id,
-      number: order.table.number,
-    },
+    table: order.table
+      ? {
+          id: order.table.id,
+          number: order.table.number,
+        }
+      : null,
     items: order.items.map((item) => ({
       id: item.id,
       quantity: item.quantity,

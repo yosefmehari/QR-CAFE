@@ -18,10 +18,10 @@ export async function PATCH(
     const body = await request.json()
     const { name, role, password } = body
 
-    const data: { name?: string; role?: 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER'; password?: string } = {}
+    const data: { name?: string; role?: 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER' | 'DELIVERY'; password?: string } = {}
 
     if (name?.trim()) data.name = name.trim()
-    if (['ADMIN', 'KITCHEN', 'JUICE_MAKER', 'WAITER'].includes(role)) data.role = role
+    if (['ADMIN', 'KITCHEN', 'JUICE_MAKER', 'WAITER', 'DELIVERY'].includes(role)) data.role = role
     if (password?.trim()) {
       data.password = await bcrypt.hash(password.trim(), 10)
     }

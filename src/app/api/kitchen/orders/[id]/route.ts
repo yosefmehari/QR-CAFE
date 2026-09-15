@@ -10,7 +10,7 @@ export async function PATCH(
 ) {
   try {
     const session = await getSession()
-    const allowedRoles = ['KITCHEN', 'JUICE_MAKER', 'WAITER', 'ADMIN']
+    const allowedRoles = ['KITCHEN', 'JUICE_MAKER', 'WAITER', 'DELIVERY', 'ADMIN']
     if (!session || !allowedRoles.includes(session.role)) {
       return NextResponse.json({ error: 'Unauthorized. Staff access required.' }, { status: 401 })
     }
@@ -23,11 +23,22 @@ export async function PATCH(
       return NextResponse.json({ error: formatZodError(parsed.error) }, { status: 400 })
     }
 
-    const { status } = parsed.data
+    const { status, acceptedBy, paymentStatus, paymentReference, notes } = parsed.data
+
+    const updateData: Record<string, unknown> = {}
+    if (status) updateData.status = status
+    if (acceptedBy !== undefined) {
+      updateData.acceptedBy = acceptedBy
+    } else if (status === 'CONFIRMED' || status === 'OUT_FOR_DELIVERY') {
+      updateData.acceptedBy = session.name || session.role
+    }
+    if (paymentStatus) updateData.paymentStatus = paymentStatus
+    if (paymentReference !== undefined) updateData.paymentReference = paymentReference
+    if (notes !== undefined) updateData.notes = notes
 
     const updatedOrder = await db.order.update({
       where: { id },
-      data: { status },
+      data: updateData,
       include: {
         table: {
           select: {

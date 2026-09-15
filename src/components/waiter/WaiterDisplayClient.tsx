@@ -16,6 +16,10 @@ import {
   Sparkles,
   History,
   Layers,
+  Bike,
+  Phone,
+  User,
+  Send,
 } from 'lucide-react'
 
 export type WaiterOrderItem = {
@@ -37,17 +41,23 @@ export type WaiterOrderItem = {
 
 export type WaiterOrder = {
   id: string
-  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'SERVED' | 'CANCELLED'
+  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'SERVED' | 'CANCELLED'
+  orderType?: 'DINE_IN' | 'DELIVERY'
+  customerName?: string | null
+  customerPhone?: string | null
+  deliveryAddress?: string | null
+  deliveryNotes?: string | null
+  acceptedBy?: string | null
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
   totalPrice: number | string
   notes?: string | null
   createdAt: string
-  table: {
+  table?: {
     id: string
     number: number
-  }
+  } | null
   items: WaiterOrderItem[]
 }
 
@@ -67,7 +77,7 @@ export default function WaiterDisplayClient({
   tables,
 }: WaiterDisplayClientProps) {
   const [orders, setOrders] = useState<WaiterOrder[]>(initialOrders)
-  const [activeTab, setActiveTab] = useState<'ready' | 'preparing' | 'all' | 'history'>('ready')
+  const [activeTab, setActiveTab] = useState<'ready' | 'delivery' | 'preparing' | 'all' | 'history'>('ready')
   const [selectedTableNumber, setSelectedTableNumber] = useState<number | null>(null)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -134,7 +144,10 @@ export default function WaiterDisplayClient({
           )
           if (newlyReady.length > 0) {
             playServiceBell()
-            showToast(`🔔 Table ${newlyReady[0].table.number} order is READY for delivery!`)
+            const destination = newlyReady[0].table
+              ? `Table #${newlyReady[0].table.number}`
+              : `Delivery to ${newlyReady[0].deliveryAddress || 'Address'}`
+            showToast(`🔔 ${destination} order is READY for delivery!`)
           }
         }
 
@@ -160,28 +173,32 @@ export default function WaiterDisplayClient({
     return () => clearInterval(interval)
   }, [fetchOrders])
 
-  // Mark as Served action
-  const markAsServed = async (orderId: string, tableNumber: number) => {
+  // General Status Update action for Waiters
+  const updateOrderStatus = async (
+    orderId: string,
+    newStatus: WaiterOrder['status'],
+    successMsg: string
+  ) => {
     setUpdatingOrderId(orderId)
     try {
       // Optimistic update
       setOrders((prev) =>
-        prev.map((o) => (o.id === orderId ? { ...o, status: 'SERVED' } : o))
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus } : o))
       )
 
       const res = await fetch(`/api/kitchen/orders/${orderId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'SERVED' }),
+        body: JSON.stringify({ status: newStatus }),
       })
 
       if (!res.ok) {
         throw new Error('Failed to update status')
       }
 
-      showToast(`✓ Table ${tableNumber} marked as SERVED!`)
+      showToast(successMsg)
     } catch {
-      showToast('⚠️ Error marking order as served')
+      showToast('⚠️ Error updating order status')
       fetchOrders(false)
     } finally {
       setUpdatingOrderId(null)
@@ -190,11 +207,15 @@ export default function WaiterDisplayClient({
 
   // Table status calculation
   const getTableStatus = (tableNum: number) => {
-    const tableOrders = orders.filter((o) => o.table.number === tableNum)
+    const tableOrders = orders.filter((o) => o.table?.number === tableNum)
     const hasReady = tableOrders.some((o) => o.status === 'READY')
     if (hasReady) return 'READY'
     const hasPrep = tableOrders.some(
-      (o) => o.status === 'PREPARING' || o.status === 'PENDING' || o.status === 'CONFIRMED'
+      (o) =>
+        o.status === 'PREPARING' ||
+        o.status === 'PENDING' ||
+        o.status === 'CONFIRMED' ||
+        o.status === 'OUT_FOR_DELIVERY'
     )
     if (hasPrep) return 'PREPARING'
     const hasServed = tableOrders.some((o) => o.status === 'SERVED')
@@ -204,16 +225,27 @@ export default function WaiterDisplayClient({
 
   // Filter orders
   const filteredOrders = orders.filter((order) => {
-    if (selectedTableNumber !== null && order.table.number !== selectedTableNumber) {
-      return false
+    if (selectedTableNumber !== null) {
+      if (selectedTableNumber === -1) {
+        if (order.orderType !== 'DELIVERY') return false
+      } else if (order.table?.number !== selectedTableNumber) {
+        return false
+      }
     }
 
     if (activeTab === 'ready') return order.status === 'READY'
+    if (activeTab === 'delivery')
+      return (
+        order.orderType === 'DELIVERY' &&
+        order.status !== 'SERVED' &&
+        order.status !== 'CANCELLED'
+      )
     if (activeTab === 'preparing')
       return (
         order.status === 'PREPARING' ||
         order.status === 'PENDING' ||
-        order.status === 'CONFIRMED'
+        order.status === 'CONFIRMED' ||
+        order.status === 'OUT_FOR_DELIVERY'
       )
     if (activeTab === 'all')
       return order.status !== 'SERVED' && order.status !== 'CANCELLED'
@@ -224,9 +256,18 @@ export default function WaiterDisplayClient({
 
   // Counters
   const countReady = orders.filter((o) => o.status === 'READY').length
+  const countDeliveries = orders.filter(
+    (o) =>
+      o.orderType === 'DELIVERY' &&
+      o.status !== 'SERVED' &&
+      o.status !== 'CANCELLED'
+  ).length
   const countPreparing = orders.filter(
     (o) =>
-      o.status === 'PREPARING' || o.status === 'PENDING' || o.status === 'CONFIRMED'
+      o.status === 'PREPARING' ||
+      o.status === 'PENDING' ||
+      o.status === 'CONFIRMED' ||
+      o.status === 'OUT_FOR_DELIVERY'
   ).length
   const countServed = orders.filter((o) => o.status === 'SERVED').length
 
@@ -241,6 +282,7 @@ export default function WaiterDisplayClient({
       )}
 
       {/* Top Floor Metrics */}
+      {/* Top Floor & Delivery Metrics */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
         <div className="bg-gradient-to-br from-blue-950/40 to-zinc-900 border border-blue-500/30 rounded-3xl p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between">
           <div className="flex items-center justify-between">
@@ -253,21 +295,36 @@ export default function WaiterDisplayClient({
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-black text-blue-400">{countReady}</span>
-            <span className="text-xs text-zinc-400">urgent table runs</span>
+            <span className="text-xs text-zinc-400">urgent delivery runs</span>
+          </div>
+        </div>
+
+        <div className="bg-gradient-to-br from-amber-950/30 to-zinc-900 border border-amber-500/30 rounded-3xl p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+              Outside Deliveries
+            </span>
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 text-amber-400 flex items-center justify-center">
+              <Bike className="w-4 h-4" />
+            </div>
+          </div>
+          <div className="mt-3 flex items-baseline gap-2">
+            <span className="text-3xl font-black text-amber-400">{countDeliveries}</span>
+            <span className="text-xs text-zinc-400">to external addresses</span>
           </div>
         </div>
 
         <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between">
           <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">
+            <span className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
               In Kitchen / Bar
             </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-500/10 text-amber-400 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-zinc-800 text-amber-400 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
           <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-amber-400">{countPreparing}</span>
+            <span className="text-3xl font-black text-zinc-200">{countPreparing}</span>
             <span className="text-xs text-zinc-500">being prepared</span>
           </div>
         </div>
@@ -283,34 +340,19 @@ export default function WaiterDisplayClient({
           </div>
           <div className="mt-3 flex items-baseline gap-2">
             <span className="text-3xl font-black text-emerald-400">{countServed}</span>
-            <span className="text-xs text-zinc-500">orders satisfied</span>
-          </div>
-        </div>
-
-        <div className="bg-zinc-900/80 border border-zinc-800 rounded-3xl p-4 sm:p-5 relative overflow-hidden flex flex-col justify-between">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">
-              Floor Tables
-            </span>
-            <div className="w-8 h-8 rounded-xl bg-zinc-800 text-zinc-400 flex items-center justify-center">
-              <Layers className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="mt-3 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-white">{tables.length}</span>
-            <span className="text-xs text-zinc-500">active tables</span>
+            <span className="text-xs text-zinc-500">completed</span>
           </div>
         </div>
       </div>
 
-      {/* Interactive Table Floor Map */}
+      {/* Interactive Table Floor Map & Delivery Station */}
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-4 sm:p-6 space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <MapPin className="w-5 h-5 text-blue-400" />
-            <h2 className="text-base font-bold text-white">Cafe Dining Floor Map</h2>
+            <h2 className="text-base font-bold text-white">Floor &amp; Delivery Overview</h2>
             <span className="text-xs text-zinc-400 hidden sm:inline">
-              (Click any table to view orders)
+              (Click any table or Outside Delivery to filter)
             </span>
           </div>
 
@@ -338,8 +380,30 @@ export default function WaiterDisplayClient({
           </div>
         </div>
 
-        {/* Tables Grid */}
+        {/* Tables & Deliveries Grid */}
         <div className="grid grid-cols-4 sm:grid-cols-8 gap-2.5 sm:gap-3">
+          {/* Outside Delivery Filter Tile */}
+          <button
+            onClick={() => setSelectedTableNumber(selectedTableNumber === -1 ? null : -1)}
+            className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer col-span-2 sm:col-span-2 ${
+              selectedTableNumber === -1
+                ? 'ring-2 ring-amber-400 scale-105 bg-amber-500/20 border-amber-500'
+                : countDeliveries > 0
+                ? 'bg-amber-950/40 border-amber-500/50 text-amber-300 shadow-md animate-pulse'
+                : 'bg-zinc-950/80 border-zinc-800 text-zinc-400 hover:border-zinc-700'
+            }`}
+          >
+            <span className="text-[10px] uppercase font-bold tracking-wider opacity-80 flex items-center gap-1">
+              <Bike className="w-3.5 h-3.5 text-amber-400" /> Outside
+            </span>
+            <span className="text-xl sm:text-2xl font-black text-amber-400">
+              {countDeliveries}
+            </span>
+            <span className="text-[9px] font-bold px-2 py-0.5 rounded-md uppercase tracking-wider bg-amber-500/20 text-amber-300">
+              {countDeliveries > 0 ? 'DELIVERIES' : 'NO ORDERS'}
+            </span>
+          </button>
+
           {tables.map((tbl) => {
             const status = getTableStatus(tbl.number)
             const isSelected = selectedTableNumber === tbl.number
@@ -405,10 +469,21 @@ export default function WaiterDisplayClient({
             <span>Ready for Delivery ({countReady})</span>
           </button>
           <button
+            onClick={() => setActiveTab('delivery')}
+            className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'delivery'
+                ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/25'
+                : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <Bike className="w-3.5 h-3.5" />
+            <span>Outside Deliveries ({countDeliveries})</span>
+          </button>
+          <button
             onClick={() => setActiveTab('preparing')}
             className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
               activeTab === 'preparing'
-                ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/20'
+                ? 'bg-zinc-200 text-zinc-950 shadow-md'
                 : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
           >
@@ -422,7 +497,7 @@ export default function WaiterDisplayClient({
                 : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
             }`}
           >
-            All Active Floor Orders
+            All Active Orders
           </button>
           <button
             onClick={() => setActiveTab('history')}
@@ -505,22 +580,43 @@ export default function WaiterDisplayClient({
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div
-                        className={`w-12 h-12 rounded-2xl font-black text-lg flex items-center justify-center shadow-lg ${
-                          isReady
-                            ? 'bg-blue-500 text-white shadow-blue-500/30 animate-pulse'
-                            : 'bg-zinc-800 text-white'
-                        }`}
-                      >
-                        T{order.table.number}
-                      </div>
+                      {order.orderType === 'DELIVERY' ? (
+                        <div
+                          className={`w-12 h-12 rounded-2xl font-black text-xs flex flex-col items-center justify-center shadow-lg ${
+                            isReady
+                              ? 'bg-blue-500 text-white shadow-blue-500/30 animate-pulse'
+                              : 'bg-gradient-to-tr from-amber-500 to-orange-500 text-white'
+                          }`}
+                        >
+                          <Bike className="w-5 h-5" />
+                          <span className="text-[9px] font-extrabold uppercase">DELIV</span>
+                        </div>
+                      ) : (
+                        <div
+                          className={`w-12 h-12 rounded-2xl font-black text-lg flex items-center justify-center shadow-lg ${
+                            isReady
+                              ? 'bg-blue-500 text-white shadow-blue-500/30 animate-pulse'
+                              : 'bg-zinc-800 text-white'
+                          }`}
+                        >
+                          T{order.table ? order.table.number : '?'}
+                        </div>
+                      )}
+
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-extrabold text-base text-white">
-                            Table {order.table.number}
+                            {order.orderType === 'DELIVERY'
+                              ? order.customerName || 'Outside Delivery'
+                              : `Table ${order.table ? order.table.number : '?'}`}
                           </span>
+                          {order.orderType === 'DELIVERY' && (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500 text-zinc-950">
+                              DELIVERY
+                            </span>
+                          )}
                           {isReady && (
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-500 text-white animate-pulse">
                               READY NOW
                             </span>
                           )}
@@ -537,7 +633,45 @@ export default function WaiterDisplayClient({
                     </div>
                   </div>
 
-                  {/* Customer Notes */}
+                  {/* Outside Delivery Address Card */}
+                  {order.orderType === 'DELIVERY' && (
+                    <div className="mt-3 p-3 rounded-2xl bg-amber-500/10 border border-amber-500/25 space-y-1.5 text-xs">
+                      <div className="flex items-start gap-1.5 text-amber-300">
+                        <MapPin className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                        <span className="font-bold text-white leading-tight">
+                          {order.deliveryAddress || 'Address not specified'}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2 pt-1 border-t border-amber-500/20 text-[11px]">
+                        <div className="flex items-center gap-1 text-zinc-300">
+                          <User className="w-3.5 h-3.5 text-zinc-400" />
+                          <span>{order.customerName || 'Guest'}</span>
+                        </div>
+                        {order.customerPhone && (
+                          <a
+                            href={`tel:${order.customerPhone}`}
+                            className="flex items-center gap-1 font-mono text-amber-400 hover:underline font-bold bg-amber-500/15 px-2 py-0.5 rounded-md transition-colors"
+                          >
+                            <Phone className="w-3 h-3" />
+                            <span>{order.customerPhone}</span>
+                          </a>
+                        )}
+                      </div>
+                      {order.deliveryNotes && (
+                        <div className="text-[11px] text-zinc-400 italic pt-0.5">
+                          Note: &quot;{order.deliveryNotes}&quot;
+                        </div>
+                      )}
+                      {order.acceptedBy && (
+                        <div className="text-[10px] text-emerald-400 font-semibold flex items-center gap-1 pt-0.5">
+                          <Check className="w-3 h-3" />
+                          <span>Accepted by {order.acceptedBy}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Customer General Notes */}
                   {order.notes && (
                     <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-300 text-xs flex items-start gap-2">
                       <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -564,6 +698,16 @@ export default function WaiterDisplayClient({
                           className="p-2.5 rounded-2xl bg-zinc-950/60 border border-zinc-800/70 flex items-center justify-between text-xs"
                         >
                           <div className="flex items-center gap-2.5">
+                            {item.product.imageUrl && (
+                              <div className="w-8 h-8 rounded-lg overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700/60">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={item.product.imageUrl}
+                                  alt={item.product.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
                             <span className="w-6 h-6 rounded-lg bg-zinc-800 font-bold text-zinc-200 flex items-center justify-center text-[11px]">
                               {item.quantity}x
                             </span>
@@ -600,36 +744,124 @@ export default function WaiterDisplayClient({
 
                 {/* Delivery Action Button */}
                 <div className="p-4 sm:p-5 border-t border-zinc-800/80 bg-zinc-950/60">
-                  {order.status === 'READY' ? (
-                    <button
-                      onClick={() => markAsServed(order.id, order.table.number)}
-                      disabled={isUpdating}
-                      className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 active:scale-[0.98] text-white shadow-xl shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-                    >
-                      <Check className="w-4 h-4" />
-                      <span>Mark as Served ✓ (Delivered to Table)</span>
-                    </button>
-                  ) : order.status === 'PREPARING' ||
-                    order.status === 'PENDING' ||
-                    order.status === 'CONFIRMED' ? (
-                    <div className="flex items-center justify-between text-xs py-1 text-zinc-400">
-                      <span className="flex items-center gap-1.5 text-amber-400 font-medium">
-                        <Clock className="w-4 h-4 animate-spin" />
-                        In Preparation ({order.status})
-                      </span>
+                  {order.orderType === 'DELIVERY' ? (
+                    /* Delivery Order Workflow */
+                    order.status === 'PENDING' ? (
                       <button
-                        onClick={() => markAsServed(order.id, order.table.number)}
+                        onClick={() =>
+                          updateOrderStatus(
+                            order.id,
+                            'CONFIRMED',
+                            `✓ Accepted delivery for ${order.customerName || 'Customer'}! Kitchen notified.`
+                          )
+                        }
                         disabled={isUpdating}
-                        className="text-[11px] text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
+                        className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 active:scale-[0.98] text-white shadow-xl shadow-amber-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 animate-pulse"
                       >
-                        Force Mark Served
+                        <Check className="w-4 h-4" />
+                        <span>Accept Delivery Order (Notify Kitchen)</span>
                       </button>
-                    </div>
+                    ) : order.status === 'CONFIRMED' || order.status === 'PREPARING' ? (
+                      <div className="flex items-center justify-between text-xs py-1 text-zinc-400">
+                        <span className="flex items-center gap-1.5 text-amber-400 font-medium">
+                          <Clock className="w-4 h-4 animate-spin" />
+                          Accepted • In Prep
+                        </span>
+                        <button
+                          onClick={() =>
+                            updateOrderStatus(
+                              order.id,
+                              'OUT_FOR_DELIVERY',
+                              `🛵 Out for delivery to ${order.deliveryAddress || 'Address'}!`
+                            )
+                          }
+                          disabled={isUpdating}
+                          className="text-[11px] text-amber-400 hover:text-amber-300 font-bold underline cursor-pointer"
+                        >
+                          Start Delivery Now
+                        </button>
+                      </div>
+                    ) : order.status === 'READY' ? (
+                      <button
+                        onClick={() =>
+                          updateOrderStatus(
+                            order.id,
+                            'OUT_FOR_DELIVERY',
+                            `🛵 Order is Out for Delivery to ${order.deliveryAddress || 'Address'}!`
+                          )
+                        }
+                        disabled={isUpdating}
+                        className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 active:scale-[0.98] text-white shadow-xl shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <Bike className="w-4 h-4" />
+                        <span>Start Delivery (Take to Address)</span>
+                      </button>
+                    ) : order.status === 'OUT_FOR_DELIVERY' ? (
+                      <button
+                        onClick={() =>
+                          updateOrderStatus(
+                            order.id,
+                            'SERVED',
+                            `✓ Order marked as DELIVERED to ${order.deliveryAddress || 'Address'}!`
+                          )
+                        }
+                        disabled={isUpdating}
+                        className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 active:scale-[0.98] text-white shadow-xl shadow-emerald-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Mark as Delivered ✓ (Arrived at Address)</span>
+                      </button>
+                    ) : (
+                      <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-bold py-1">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Delivered to Address</span>
+                      </div>
+                    )
                   ) : (
-                    <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-bold py-1">
-                      <CheckCircle2 className="w-4 h-4" />
-                      <span>Delivered &amp; Served</span>
-                    </div>
+                    /* Dine-In Order Workflow */
+                    order.status === 'READY' ? (
+                      <button
+                        onClick={() =>
+                          updateOrderStatus(
+                            order.id,
+                            'SERVED',
+                            `✓ Table ${order.table ? order.table.number : '?'} marked as SERVED!`
+                          )
+                        }
+                        disabled={isUpdating}
+                        className="w-full py-3.5 px-4 rounded-2xl font-bold text-xs sm:text-sm bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 active:scale-[0.98] text-white shadow-xl shadow-blue-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                      >
+                        <Check className="w-4 h-4" />
+                        <span>Mark as Served ✓ (Delivered to Table)</span>
+                      </button>
+                    ) : order.status === 'PREPARING' ||
+                      order.status === 'PENDING' ||
+                      order.status === 'CONFIRMED' ? (
+                      <div className="flex items-center justify-between text-xs py-1 text-zinc-400">
+                        <span className="flex items-center gap-1.5 text-amber-400 font-medium">
+                          <Clock className="w-4 h-4 animate-spin" />
+                          In Preparation ({order.status})
+                        </span>
+                        <button
+                          onClick={() =>
+                            updateOrderStatus(
+                              order.id,
+                              'SERVED',
+                              `✓ Table ${order.table ? order.table.number : '?'} marked as SERVED!`
+                            )
+                          }
+                          disabled={isUpdating}
+                          className="text-[11px] text-zinc-500 hover:text-zinc-300 underline cursor-pointer"
+                        >
+                          Force Mark Served
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-1.5 text-xs text-emerald-400 font-bold py-1">
+                        <CheckCircle2 className="w-4 h-4" />
+                        <span>Delivered &amp; Served</span>
+                      </div>
+                    )
                   )}
                 </div>
               </div>

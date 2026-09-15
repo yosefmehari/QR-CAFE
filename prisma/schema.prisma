@@ -24,6 +24,7 @@ enum Role {
   KITCHEN
   JUICE_MAKER
   WAITER
+  DELIVERY
 }
 
 // ─── CATEGORIES (Burgers, Pizza, Drinks…) ───────────────────────────────────
@@ -70,12 +71,18 @@ model Table {
 // ─── ORDERS ─────────────────────────────────────────────────────────────────
 
 model Order {
-  id               String        @id @default(cuid())
-  table            Table         @relation(fields: [tableId], references: [id])
-  tableId          String
-  status           OrderStatus   @default(PENDING)
-  paymentMethod    PaymentMethod @default(CARD)
-  paymentStatus    PaymentStatus @default(PENDING)
+  id                String        @id @default(cuid())
+  table             Table?        @relation(fields: [tableId], references: [id])
+  tableId           String?
+  orderType         OrderType     @default(DINE_IN)
+  customerName      String?
+  customerPhone     String?
+  deliveryAddress   String?
+  deliveryNotes     String?
+  acceptedBy        String?
+  status            OrderStatus   @default(PENDING)
+  paymentMethod     PaymentMethod @default(CARD)
+  paymentStatus     PaymentStatus @default(PENDING)
   paymentReference  String?
   paymentScreenshot String?
   totalPrice        Decimal       @db.Decimal(10, 2)
@@ -85,11 +92,17 @@ model Order {
   updatedAt         DateTime      @updatedAt
 }
 
+enum OrderType {
+  DINE_IN
+  DELIVERY
+}
+
 enum OrderStatus {
   PENDING
   CONFIRMED
   PREPARING
   READY
+  OUT_FOR_DELIVERY
   SERVED
   CANCELLED
 }

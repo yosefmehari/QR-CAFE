@@ -53,6 +53,7 @@ export default function ProductsManager({
   const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [price, setPrice] = useState<number | ''>('')
+  const [imageUrl, setImageUrl] = useState('')
   const [categoryId, setCategoryId] = useState('')
   const [isAvailable, setIsAvailable] = useState(true)
 
@@ -89,6 +90,7 @@ export default function ProductsManager({
     setName('')
     setDescription('')
     setPrice('')
+    setImageUrl('')
     setCategoryId(categories[0]?.id || '')
     setIsAvailable(true)
     setErrorMessage(null)
@@ -100,6 +102,7 @@ export default function ProductsManager({
     setName(p.name)
     setDescription(p.description || '')
     setPrice(p.price)
+    setImageUrl(p.imageUrl || '')
     setCategoryId(p.categoryId)
     setIsAvailable(p.isAvailable)
     setErrorMessage(null)
@@ -163,6 +166,7 @@ export default function ProductsManager({
           name: name.trim(),
           description: description.trim() || undefined,
           price: Number(price),
+          imageUrl: imageUrl.trim() || null,
           categoryId,
           isAvailable,
         }),
@@ -301,9 +305,17 @@ export default function ProductsManager({
                   >
                     <td className="py-4 px-4 sm:px-6">
                       <div className="flex items-center gap-3">
-                        <span className="text-2xl select-none shrink-0">
-                          {prod.category?.emoji || '🍽️'}
-                        </span>
+                        <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700/60 flex items-center justify-center">
+                          {prod.imageUrl ? (
+                            <img
+                              src={prod.imageUrl}
+                              alt={prod.name}
+                              className="w-full h-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-2xl select-none">{prod.category?.emoji || '🍽️'}</span>
+                          )}
+                        </div>
                         <div>
                           <div className="font-bold text-white text-sm">
                             {prod.name}
@@ -459,6 +471,30 @@ export default function ProductsManager({
                     ))}
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-zinc-300 uppercase tracking-wider mb-1">
+                  Photo URL (Real Food Photo)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="url"
+                    placeholder="https://images.unsplash.com/photo-..."
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    className="flex-1 px-3.5 py-2 text-xs bg-zinc-800 border border-zinc-700 rounded-xl text-zinc-200 focus:outline-none focus:border-amber-500 font-mono"
+                  />
+                  {imageUrl && (
+                    <div className="w-9 h-9 rounded-lg overflow-hidden border border-zinc-700 shrink-0 bg-zinc-800">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={imageUrl} alt="Preview" className="w-full h-full object-cover" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-[10px] text-zinc-500 mt-1">
+                  Enter a direct web image link (Unsplash or image hosting URL).
+                </p>
               </div>
 
               <div>

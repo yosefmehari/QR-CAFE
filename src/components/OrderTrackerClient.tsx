@@ -14,6 +14,9 @@ import {
   RefreshCw,
   Sparkles,
   Camera,
+  Bike,
+  MapPin,
+  Phone,
 } from 'lucide-react'
 
 export type OrderStatus =
@@ -21,6 +24,7 @@ export type OrderStatus =
   | 'CONFIRMED'
   | 'PREPARING'
   | 'READY'
+  | 'OUT_FOR_DELIVERY'
   | 'SERVED'
   | 'CANCELLED'
 
@@ -28,6 +32,7 @@ export interface TrackedItem {
   id: string
   name: string
   emoji: string
+  imageUrl?: string | null
   quantity: number
   unitPrice: number
   notes?: string | null
@@ -37,13 +42,19 @@ export interface TrackedOrder {
   id: string
   shortId: string
   status: OrderStatus
+  orderType?: 'DINE_IN' | 'DELIVERY'
+  customerName?: string | null
+  customerPhone?: string | null
+  deliveryAddress?: string | null
+  deliveryNotes?: string | null
+  acceptedBy?: string | null
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
   paymentScreenshot?: string | null
   totalPrice: number
   notes?: string | null
-  tableNumber: number
+  tableNumber?: number | null
   createdAt: string | Date
   updatedAt: string | Date
   items: TrackedItem[]
@@ -53,7 +64,7 @@ interface Props {
   initialOrder: TrackedOrder
 }
 
-const STATUS_STEPS: Array<{
+const DINE_IN_STATUS_STEPS: Array<{
   key: OrderStatus
   title: string
   description: string
@@ -91,17 +102,62 @@ const STATUS_STEPS: Array<{
   },
 ]
 
+const DELIVERY_STATUS_STEPS: Array<{
+  key: OrderStatus
+  title: string
+  description: string
+  icon: React.ElementType
+}> = [
+  {
+    key: 'PENDING',
+    title: 'Order Placed',
+    description: 'Waiting for waiter to accept',
+    icon: Clock,
+  },
+  {
+    key: 'CONFIRMED',
+    title: 'Accepted',
+    description: 'Assigned to waitstaff',
+    icon: CheckCircle2,
+  },
+  {
+    key: 'PREPARING',
+    title: 'Kitchen Prep',
+    description: 'Chefs preparing your food',
+    icon: ChefHat,
+  },
+  {
+    key: 'OUT_FOR_DELIVERY',
+    title: 'Out for Delivery',
+    description: 'Waiter on the way to your place',
+    icon: Bike,
+  },
+  {
+    key: 'SERVED',
+    title: 'Delivered',
+    description: 'Delivered to your address',
+    icon: CheckCircle2,
+  },
+]
+
 export default function OrderTrackerClient({ initialOrder }: Props) {
   const [order, setOrder] = useState<TrackedOrder>(initialOrder)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
+
+  const isDelivery = order.orderType === 'DELIVERY'
+  const currentSteps = isDelivery ? DELIVERY_STATUS_STEPS : DINE_IN_STATUS_STEPS
 
   // Save active order to local storage for quick access from the menu
   useEffect(() => {
     if (typeof window !== 'undefined') {
       if (order.status !== 'SERVED' && order.status !== 'CANCELLED') {
         localStorage.setItem('qr_cafe_active_order_id', order.id)
-        localStorage.setItem('qr_cafe_active_order_table', String(order.tableNumber))
+        if (order.tableNumber) {
+          localStorage.setItem('qr_cafe_active_order_table', String(order.tableNumber))
+        } else {
+          localStorage.removeItem('qr_cafe_active_order_table')
+        }
       } else {
         localStorage.removeItem('qr_cafe_active_order_id')
       }
@@ -157,14 +213,19 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
   // Calculate progress percentage
   const currentStepIndex = useMemo(() => {
     if (order.status === 'CANCELLED') return -1
-    return STATUS_STEPS.findIndex((s) => s.key === order.status)
-  }, [order.status])
+    if (isDelivery) {
+      if (order.status === 'READY') return 2 // Between PREPARING and OUT_FOR_DELIVERY
+      return DELIVERY_STATUS_STEPS.findIndex((s) => s.key === order.status)
+    }
+    return DINE_IN_STATUS_STEPS.findIndex((s) => s.key === order.status)
+  }, [order.status, isDelivery])
 
   const progressPercentage = useMemo(() => {
     if (order.status === 'CANCELLED') return 0
     if (currentStepIndex === -1) return 0
-    return Math.round((currentStepIndex / (STATUS_STEPS.length - 1)) * 100)
-  }, [currentStepIndex, order.status])
+    const totalSteps = currentSteps.length - 1
+    return Math.min(100, Math.round((currentStepIndex / totalSteps) * 100))
+  }, [currentStepIndex, currentSteps.length, order.status])
 
   const isCompleted = order.status === 'SERVED'
   const isCancelled = order.status === 'CANCELLED'
@@ -175,11 +236,11 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
         {/* Navigation Bar */}
         <div className="flex items-center justify-between">
           <Link
-            href={`/?table=${order.tableNumber}`}
+            href={order.tableNumber ? `/?table=${order.tableNumber}` : '/'}
             className="inline-flex items-center gap-2 text-xs font-bold text-zinc-600 dark:text-zinc-400 hover:text-zinc-950 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            <span>Back to Menu (Table #{order.tableNumber})</span>
+            <span>{order.tableNumber ? `Back to Menu (Table #${order.tableNumber})` : 'Back to Menu'}</span>
           </Link>
 
           <button
@@ -219,12 +280,19 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                 </p>
               </div>
 
-              {/* Table Seating & Payment Badges */}
+              {/* Table Seating / Outside Delivery Badges */}
               <div className="flex flex-wrap items-center gap-2 self-start sm:self-center">
-                <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 font-bold text-sm shrink-0 shadow-xs">
-                  <UtensilsCrossed className="w-4 h-4 text-amber-600" />
-                  <span>Table #{order.tableNumber}</span>
-                </div>
+                {isDelivery ? (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-gradient-to-r from-amber-500/15 to-orange-500/15 border border-amber-500/30 text-amber-900 dark:text-amber-200 font-bold text-sm shrink-0 shadow-xs">
+                    <Bike className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                    <span>Outside Delivery</span>
+                  </div>
+                ) : (
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 font-bold text-sm shrink-0 shadow-xs">
+                    <UtensilsCrossed className="w-4 h-4 text-amber-600" />
+                    <span>Table #{order.tableNumber ?? '?'}</span>
+                  </div>
+                )}
 
                 {order.paymentStatus === 'PAID' ? (
                   <div className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800/60 text-emerald-700 dark:text-emerald-300 font-bold text-xs shrink-0 shadow-xs">
@@ -236,12 +304,65 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                     <span>
                       {order.paymentMethod === 'BANK_TRANSFER'
                         ? `🏦 ${order.paymentReference || 'Bank Transfer Pending'}`
-                        : '💵 Pay at Counter / Table'}
+                        : '💵 Pay on Delivery / Counter'}
                     </span>
                   </div>
                 )}
               </div>
             </div>
+
+            {/* Delivery Destination & Waiter Info Box */}
+            {isDelivery && (
+              <div className="mt-6 p-4 sm:p-5 rounded-2xl bg-amber-500/5 dark:bg-amber-500/10 border border-amber-500/20 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-700 dark:text-amber-400 flex items-center gap-1.5">
+                    <MapPin className="w-4 h-4" />
+                    Delivery Destination
+                  </span>
+                  {order.acceptedBy ? (
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Assigned Waiter: <strong>{order.acceptedBy}</strong>
+                    </span>
+                  ) : (
+                    <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 flex items-center gap-1 animate-pulse">
+                      <Clock className="w-3.5 h-3.5" />
+                      Awaiting Waiter Acceptance
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                  <div className="space-y-1">
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium block">Delivery Address / Place:</span>
+                    <p className="font-bold text-zinc-900 dark:text-zinc-100 text-sm">
+                      {order.deliveryAddress || 'Address not specified'}
+                    </p>
+                  </div>
+
+                  <div className="space-y-1">
+                    <span className="text-zinc-500 dark:text-zinc-400 font-medium block">Recipient:</span>
+                    <div className="font-semibold text-zinc-900 dark:text-zinc-100">
+                      {order.customerName && <span>{order.customerName}</span>}
+                      {order.customerPhone && (
+                        <div className="flex items-center gap-1 mt-0.5 text-amber-600 dark:text-amber-400 font-mono">
+                          <Phone className="w-3 h-3" />
+                          <a href={`tel:${order.customerPhone}`} className="hover:underline">
+                            {order.customerPhone}
+                          </a>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {order.deliveryNotes && (
+                  <div className="pt-2 border-t border-amber-500/15 text-xs text-amber-900 dark:text-amber-200">
+                    <span className="font-bold">Landmark / Directions:</span> {order.deliveryNotes}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Awaiting Admin Payment Check Notice */}
             {order.paymentStatus !== 'PAID' && !isCancelled && (
@@ -308,7 +429,7 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
 
                 {/* Vertical Stepper */}
                 <div className="grid grid-cols-1 sm:grid-cols-5 gap-3 pt-2">
-                  {STATUS_STEPS.map((step, index) => {
+                  {currentSteps.map((step, index) => {
                     const isStepCompleted = index < currentStepIndex
                     const isStepCurrent = index === currentStepIndex
                     const Icon = step.icon
@@ -340,7 +461,9 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                             {step.title}
                           </h4>
                           <p className="text-[10px] text-zinc-500 dark:text-zinc-400 hidden sm:block mt-0.5 leading-tight">
-                            {step.description}
+                            {step.key === 'CONFIRMED' && isDelivery && order.acceptedBy
+                              ? `Accepted by ${order.acceptedBy}`
+                              : step.description}
                           </p>
                         </div>
                       </div>
@@ -359,13 +482,25 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
             <div>
               <h3 className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
                 {isCompleted
-                  ? 'Your meal has been served! Enjoy your visit.'
+                  ? isDelivery
+                    ? `Order delivered to ${order.deliveryAddress || 'your address'}! Enjoy your meal!`
+                    : 'Your meal has been served! Enjoy your visit.'
                   : isCancelled
                   ? 'Order is cancelled.'
                   : order.paymentStatus !== 'PAID'
                   ? 'Wait, your payment is checking... Please stay on this screen.'
+                  : isDelivery
+                  ? order.status === 'OUT_FOR_DELIVERY'
+                    ? `Your order is on the way! ${order.acceptedBy ? order.acceptedBy + ' is delivering' : 'A waiter is delivering'} to your address.`
+                    : order.status === 'READY'
+                    ? 'Your meal is prepared and packed! Waitstaff is getting ready to deliver.'
+                    : order.status === 'PREPARING'
+                    ? 'Chefs are currently preparing your delivery order.'
+                    : order.status === 'CONFIRMED'
+                    ? `${order.acceptedBy ? `Accepted by ${order.acceptedBy}!` : 'Order accepted!'} Sent to kitchen.`
+                    : 'Order placed! Waiting for a waiter to accept and verify your address.'
                   : order.status === 'READY'
-                  ? 'Plated! Server is bringing dishes to Table #' + order.tableNumber
+                  ? 'Plated! Server is bringing dishes to Table #' + (order.tableNumber ?? '')
                   : order.status === 'PREPARING'
                   ? 'Our chefs are currently preparing your fresh items.'
                   : order.status === 'CONFIRMED'
@@ -377,7 +512,9 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                   ? 'Need anything else? You can order more items anytime.'
                   : order.paymentStatus !== 'PAID'
                   ? 'The admin is verifying your transfer or counter payment. As soon as the admin clicks "Checked", your order unlocks.'
-                  : 'This screen updates automatically as the kitchen changes order status.'}
+                  : isDelivery && order.status === 'OUT_FOR_DELIVERY'
+                  ? 'Please ensure your phone is reachable so the waiter can hand over your food smoothly.'
+                  : 'This screen updates automatically as waitstaff and kitchen change order status.'}
               </p>
             </div>
           </div>
@@ -396,8 +533,18 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
             <div className="divide-y divide-zinc-100 dark:divide-zinc-800/60">
               {order.items.map((item) => (
                 <div key={item.id} className="py-3 flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-2.5">
-                    <span className="text-xl select-none">{item.emoji}</span>
+                  <div className="flex items-start gap-3">
+                    <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
+                      {item.imageUrl ? (
+                        <img
+                          src={item.imageUrl}
+                          alt={item.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-xl select-none">{item.emoji}</span>
+                      )}
+                    </div>
                     <div>
                       <div className="flex items-baseline gap-2">
                         <span className="text-xs font-bold text-amber-600">
@@ -437,11 +584,11 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
           {/* Action Footer */}
           <div className="p-6 bg-zinc-50 dark:bg-zinc-950/60 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3">
             <Link
-              href={`/?table=${order.tableNumber}`}
+              href={order.tableNumber ? `/?table=${order.tableNumber}` : '/'}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-bold text-xs bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 transition-all cursor-pointer"
             >
-              <UtensilsCrossed className="w-3.5 h-3.5" />
-              <span>Order More for Table #{order.tableNumber}</span>
+              {isDelivery ? <Bike className="w-3.5 h-3.5" /> : <UtensilsCrossed className="w-3.5 h-3.5" />}
+              <span>{order.tableNumber ? `Order More for Table #${order.tableNumber}` : 'Order More Items'}</span>
             </Link>
 
             <Link

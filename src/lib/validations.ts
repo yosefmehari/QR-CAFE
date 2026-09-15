@@ -16,43 +16,104 @@ export const orderItemSchema = z.object({
     .nullable(),
 })
 
-export const createOrderSchema = z.object({
-  tableNumber: z
-    .number()
-    .int('Table number must be an integer')
-    .min(1, 'Table number must be at least 1'),
-  notes: z
-    .string()
-    .max(300, 'Order notes cannot exceed 300 characters')
-    .optional()
-    .nullable(),
-  paymentMethod: z
-    .enum(['CARD', 'APPLE_PAY', 'GOOGLE_PAY', 'CASH', 'BANK_TRANSFER'] as const)
-    .default('CARD'),
-  paymentScreenshot: z.string().optional().nullable(),
-  cardDetails: z
-    .object({
-      cardholderName: z.string().optional(),
-      cardNumber: z.string().optional(),
-      expiry: z.string().optional(),
-      cvc: z.string().optional(),
-    })
-    .optional()
-    .nullable(),
-  bankTransferDetails: z
-    .object({
-      senderName: z.string().optional(),
-      transactionReference: z.string().optional().nullable(),
-      screenshotUrl: z.string().optional().nullable(),
-      bankUsed: z.string().optional(),
-    })
-    .optional()
-    .nullable(),
-  items: z
-    .array(orderItemSchema)
-    .min(1, 'Order must contain at least one item')
-    .max(50, 'Orders cannot exceed 50 distinct line items'),
-})
+export const createOrderSchema = z
+  .object({
+    orderType: z.enum(['DINE_IN', 'DELIVERY'] as const).default('DINE_IN'),
+    tableNumber: z
+      .number()
+      .int('Table number must be an integer')
+      .min(1, 'Table number must be at least 1')
+      .optional()
+      .nullable(),
+    customerName: z
+      .string()
+      .trim()
+      .max(80, 'Customer name cannot exceed 80 characters')
+      .optional()
+      .nullable(),
+    customerPhone: z
+      .string()
+      .trim()
+      .max(30, 'Phone number cannot exceed 30 characters')
+      .optional()
+      .nullable(),
+    deliveryAddress: z
+      .string()
+      .trim()
+      .max(300, 'Delivery address cannot exceed 300 characters')
+      .optional()
+      .nullable(),
+    deliveryNotes: z
+      .string()
+      .trim()
+      .max(300, 'Delivery notes cannot exceed 300 characters')
+      .optional()
+      .nullable(),
+    notes: z
+      .string()
+      .max(300, 'Order notes cannot exceed 300 characters')
+      .optional()
+      .nullable(),
+    paymentMethod: z
+      .enum(['CARD', 'APPLE_PAY', 'GOOGLE_PAY', 'CASH', 'BANK_TRANSFER'] as const)
+      .default('CARD'),
+    paymentScreenshot: z.string().optional().nullable(),
+    cardDetails: z
+      .object({
+        cardholderName: z.string().optional(),
+        cardNumber: z.string().optional(),
+        expiry: z.string().optional(),
+        cvc: z.string().optional(),
+      })
+      .optional()
+      .nullable(),
+    bankTransferDetails: z
+      .object({
+        senderName: z.string().optional(),
+        transactionReference: z.string().optional().nullable(),
+        screenshotUrl: z.string().optional().nullable(),
+        bankUsed: z.string().optional(),
+      })
+      .optional()
+      .nullable(),
+    items: z
+      .array(orderItemSchema)
+      .min(1, 'Order must contain at least one item')
+      .max(50, 'Orders cannot exceed 50 distinct line items'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.orderType === 'DINE_IN') {
+      if (!data.tableNumber || data.tableNumber < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['tableNumber'],
+          message: 'Please provide a valid table number for dine-in orders.',
+        })
+      }
+    } else if (data.orderType === 'DELIVERY') {
+      if (!data.deliveryAddress || data.deliveryAddress.trim().length < 3) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['deliveryAddress'],
+          message: 'Please enter your delivery address or location (e.g. office, street, apartment).',
+        })
+      }
+      if (!data.customerPhone || data.customerPhone.trim().length < 5) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customerPhone'],
+          message: 'Please provide a phone number so our waiter can coordinate your delivery.',
+        })
+      }
+      if (!data.customerName || data.customerName.trim().length < 2) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['customerName'],
+          message: 'Please provide your name for the delivery.',
+        })
+      }
+    }
+  })
 
 // ─── CAFE SETTINGS SCHEMAS ───────────────────────────────────────────────────
 
@@ -145,9 +206,20 @@ export const updateTableSchema = createTableSchema.partial()
 // ─── ORDER STATUS SCHEMAS ────────────────────────────────────────────────────
 
 export const updateOrderStatusSchema = z.object({
-  status: z.enum(['PENDING', 'CONFIRMED', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'] as const).optional(),
+  status: z
+    .enum([
+      'PENDING',
+      'CONFIRMED',
+      'PREPARING',
+      'READY',
+      'OUT_FOR_DELIVERY',
+      'SERVED',
+      'CANCELLED',
+    ] as const)
+    .optional(),
   paymentStatus: z.enum(['PENDING', 'PAID', 'REFUNDED'] as const).optional(),
   paymentReference: z.string().optional().nullable(),
+  acceptedBy: z.string().optional().nullable(),
   notes: z.string().optional().nullable(),
 })
 

@@ -16,7 +16,12 @@ export async function POST(request: NextRequest) {
     }
 
     const {
+      orderType = 'DINE_IN',
       tableNumber,
+      customerName,
+      customerPhone,
+      deliveryAddress,
+      deliveryNotes,
       notes,
       items,
       paymentMethod,
@@ -30,16 +35,26 @@ export async function POST(request: NextRequest) {
       bankTransferDetails?.screenshotUrl?.trim() ||
       null
 
-    // 2. Validate physical table in PostgreSQL
-    const table = await db.table.findUnique({
-      where: { number: tableNumber },
-    })
+    // 2. Validate physical table if Dine-In
+    let tableRecord: { id: string; number: number } | null = null
+    if (orderType === 'DINE_IN') {
+      if (!tableNumber) {
+        return NextResponse.json(
+          { error: 'Please provide a valid dining table number' },
+          { status: 400 }
+        )
+      }
+      const table = await db.table.findUnique({
+        where: { number: tableNumber },
+      })
 
-    if (!table || !table.isActive) {
-      return NextResponse.json(
-        { error: `Table #${tableNumber} does not exist or is currently inactive` },
-        { status: 400 }
-      )
+      if (!table || !table.isActive) {
+        return NextResponse.json(
+          { error: `Table #${tableNumber} does not exist or is currently inactive` },
+          { status: 400 }
+        )
+      }
+      tableRecord = table
     }
 
     // 3. Strict Payment Validation: Do not let invalid payments pass
@@ -197,14 +212,22 @@ export async function POST(request: NextRequest) {
       paymentReference = `Google Pay (TXN-${Date.now().toString(36).toUpperCase()})`
     } else {
       paymentStatus = 'PENDING'
-      paymentReference = 'Pay with Cash at Counter'
+      paymentReference =
+        orderType === 'DELIVERY'
+          ? 'Cash on Delivery (Pay to Waiter upon arrival)'
+          : 'Pay with Cash at Counter / Table'
     }
 
     // 6. Execute Atomic PostgreSQL Transaction via Prisma
     const newOrder = await db.$transaction(async (tx) => {
       const order = await tx.order.create({
         data: {
-          tableId: table.id,
+          tableId: tableRecord ? tableRecord.id : null,
+          orderType,
+          customerName: customerName?.trim() || null,
+          customerPhone: customerPhone?.trim() || null,
+          deliveryAddress: deliveryAddress?.trim() || null,
+          deliveryNotes: deliveryNotes?.trim() || null,
           totalPrice: calculatedTotal,
           notes: notes?.trim() || null,
           status: 'PENDING',
@@ -237,7 +260,12 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         id: newOrder.id,
-        tableNumber: table.number,
+        orderType: newOrder.orderType,
+        tableNumber: newOrder.table ? newOrder.table.number : null,
+        customerName: newOrder.customerName,
+        customerPhone: newOrder.customerPhone,
+        deliveryAddress: newOrder.deliveryAddress,
+        deliveryNotes: newOrder.deliveryNotes,
         totalPrice: Number(newOrder.totalPrice),
         status: newOrder.status,
         paymentStatus: newOrder.paymentStatus,

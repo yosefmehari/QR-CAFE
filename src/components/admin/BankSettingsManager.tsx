@@ -31,7 +31,11 @@ export interface CafeBankSettings {
 
 export interface PendingOrderRecord {
   id: string
-  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'SERVED' | 'CANCELLED'
+  status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'SERVED' | 'CANCELLED'
+  orderType?: 'DINE_IN' | 'DELIVERY'
+  deliveryAddress?: string | null
+  customerName?: string | null
+  customerPhone?: string | null
   paymentMethod?: string
   paymentStatus?: string
   paymentReference?: string | null
@@ -39,10 +43,10 @@ export interface PendingOrderRecord {
   totalPrice: number
   notes?: string | null
   createdAt: string
-  table: {
+  table?: {
     id: string
     number: number
-  }
+  } | null
   items: {
     id: string
     quantity: number
@@ -121,7 +125,10 @@ export default function BankSettingsManager({ initialSettings, showToast, onOrde
 
       if (res.ok) {
         setPendingOrders((prev) => prev.filter((o) => o.id !== order.id))
-        showToast(`Payment Checked ✓ Table #${order.table.number} ($${Number(order.totalPrice).toFixed(2)}) is approved!`)
+        const label = order.orderType === 'DELIVERY'
+          ? `Delivery #${order.id.slice(-4).toUpperCase()}`
+          : `Table #${order.table?.number ?? '?'}`
+        showToast(`Payment Checked ✓ ${label} ($${Number(order.totalPrice).toFixed(2)}) is approved!`)
         if (onOrderVerified) onOrderVerified()
       } else {
         const err = await res.json()
@@ -308,9 +315,15 @@ export default function BankSettingsManager({ initialSettings, showToast, onOrde
                   {/* Top Bar */}
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <span className="px-3 py-1 rounded-xl text-xs font-black bg-amber-500 text-zinc-950">
-                        Table {order.table.number}
-                      </span>
+                      {order.orderType === 'DELIVERY' ? (
+                        <span className="px-3 py-1 rounded-xl text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950">
+                          🛵 Delivery
+                        </span>
+                      ) : (
+                        <span className="px-3 py-1 rounded-xl text-xs font-black bg-amber-500 text-zinc-950">
+                          Table {order.table?.number ?? '?'}
+                        </span>
+                      )}
                       <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-amber-500/10 text-amber-400 border border-amber-500/20 uppercase tracking-wider">
                         {order.paymentMethod === 'BANK_TRANSFER' ? 'Bank Transfer' : order.paymentMethod || 'Payment'}
                       </span>

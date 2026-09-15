@@ -28,6 +28,7 @@ import {
   Clock,
   CupSoda,
   Bell,
+  Bike,
 } from 'lucide-react'
 
 export interface AdminStats {
@@ -61,9 +62,11 @@ interface PendingPaymentQuickItem {
   paymentMethod?: string
   paymentReference?: string | null
   createdAt: string
-  table: {
+  orderType?: 'DINE_IN' | 'DELIVERY'
+  deliveryAddress?: string | null
+  table?: {
     number: number
-  }
+  } | null
   items: {
     quantity: number
     product: {
@@ -144,7 +147,10 @@ export default function AdminDashboardClient({
       })
       if (res.ok) {
         setPendingOrders((prev) => prev.filter((o) => o.id !== order.id))
-        showToast(`Payment Checked ✓ Table #${order.table.number} ($${Number(order.totalPrice).toFixed(2)}) approved!`)
+        const label = order.orderType === 'DELIVERY'
+          ? `Delivery #${order.id.slice(-4).toUpperCase()}`
+          : `Table #${order.table?.number ?? '?'}`
+        showToast(`Payment Checked ✓ ${label} ($${Number(order.totalPrice).toFixed(2)}) approved!`)
         refreshAll()
       } else {
         const err = await res.json()
@@ -254,6 +260,14 @@ export default function AdminDashboardClient({
             >
               <Bell className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">Waiter Floor</span>
+            </Link>
+
+            <Link
+              href="/delivery"
+              className="px-3 py-1.5 rounded-xl text-xs font-medium text-amber-400 hover:text-amber-300 bg-amber-950/40 border border-amber-900/60 transition-colors flex items-center gap-1.5"
+            >
+              <Bike className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">Delivery Station</span>
             </Link>
 
             <LogoutButton />
@@ -441,9 +455,15 @@ export default function AdminDashboardClient({
                     >
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-amber-500 text-zinc-950">
-                            Table #{ord.table?.number}
-                          </span>
+                          {ord.orderType === 'DELIVERY' ? (
+                            <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-gradient-to-r from-amber-500 to-orange-500 text-zinc-950">
+                              🛵 Delivery
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-lg text-xs font-black bg-amber-500 text-zinc-950">
+                              Table #{ord.table?.number ?? '?'}
+                            </span>
+                          )}
                           <span className="text-xs font-black text-emerald-400">
                             ${Number(ord.totalPrice).toFixed(2)}
                           </span>
