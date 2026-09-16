@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { X, Plus, Minus, Check, Sparkles, ExternalLink } from 'lucide-react'
 import type { ProductItem } from '@/lib/types'
+import { getProductImage } from '@/lib/images'
 
 import { useCart } from '@/context/CartContext'
 
@@ -78,19 +79,11 @@ export default function ProductModal({ product, onClose }: ProductModalProps) {
 
         {/* Modal Banner Header */}
         <div className="w-full h-56 sm:h-64 bg-zinc-950 relative overflow-hidden flex items-center justify-center">
-          {product.imageUrl ? (
-            <img
-              src={product.imageUrl}
-              alt={product.name}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gradient-to-br from-amber-500/20 via-orange-500/15 to-red-500/10 flex items-center justify-center">
-              <span className="text-6xl sm:text-7xl filter drop-shadow-md select-none">
-                {product.category?.emoji || '🍽️'}
-              </span>
-            </div>
-          )}
+          <img
+            src={getProductImage(product.imageUrl, product.category?.slug)}
+            alt={product.name}
+            className="w-full h-full object-cover"
+          />
 
           {/* Vignette overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent pointer-events-none" />

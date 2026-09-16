@@ -48,6 +48,7 @@ interface Props {
   initialSettings?: CafeBankSettings
   initialStats: AdminStats
   adminUser: {
+    id?: string
     name: string
     email: string
     role: string
@@ -707,7 +708,7 @@ export default function AdminDashboardClient({
           <div className="animate-in fade-in duration-200">
             <StaffManager
               initialStaff={staff}
-              currentUserId={adminUser.email}
+              currentUserId={adminUser.id || adminUser.email}
               onRefresh={refreshAll}
               showToast={showToast}
             />

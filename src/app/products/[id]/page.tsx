@@ -3,6 +3,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Sparkles, Check, Utensils } from 'lucide-react'
 import type { Metadata } from 'next'
+import { getProductImage } from '@/lib/images'
 
 interface ProductPageProps {
   params: Promise<{ id: string }>
@@ -65,19 +66,11 @@ export default async function ProductDetailPage({ params }: ProductPageProps) {
         <div className="bg-white dark:bg-zinc-900/90 rounded-3xl border border-zinc-200/80 dark:border-zinc-800/80 overflow-hidden shadow-xl shadow-zinc-200/40 dark:shadow-black/60">
           {/* Visual Header */}
           <div className="w-full h-72 sm:h-96 bg-zinc-950 relative overflow-hidden flex items-center justify-center">
-            {product.imageUrl ? (
-              <img
-                src={product.imageUrl}
-                alt={product.name}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full bg-gradient-to-br from-amber-500/20 via-orange-500/15 to-red-500/10 flex items-center justify-center">
-                <span className="text-8xl filter drop-shadow-md select-none">
-                  {product.category?.emoji || '🍽️'}
-                </span>
-              </div>
-            )}
+            <img
+              src={getProductImage(product.imageUrl, product.category?.slug)}
+              alt={product.name}
+              className="w-full h-full object-cover"
+            />
 
             {/* Vignette overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-black/10 pointer-events-none" />

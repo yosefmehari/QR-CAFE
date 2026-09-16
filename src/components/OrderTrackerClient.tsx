@@ -18,6 +18,7 @@ import {
   MapPin,
   Phone,
 } from 'lucide-react'
+import { getProductImage } from '@/lib/images'
 
 export type OrderStatus =
   | 'PENDING'
@@ -535,15 +536,11 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                 <div key={item.id} className="py-3 flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 flex items-center justify-center">
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-xl select-none">{item.emoji}</span>
-                      )}
+                      <img
+                        src={getProductImage(item.imageUrl)}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
                     <div>
                       <div className="flex items-baseline gap-2">

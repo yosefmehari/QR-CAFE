@@ -2,6 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react'
 import type { ProductItem } from '@/lib/types'
+import { getProductImage } from '@/lib/images'
 
 export interface CartItem {
   id: string // compound id: `${productId}-${notes}`
@@ -97,7 +98,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           price: priceNum,
           quantity,
           notes: trimmedNotes || undefined,
-          imageUrl: product.imageUrl || null,
+          imageUrl: getProductImage(product.imageUrl, product.category?.slug),
           emoji: product.category?.emoji || '🍽️',
         },
       ]

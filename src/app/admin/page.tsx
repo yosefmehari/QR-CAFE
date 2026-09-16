@@ -117,6 +117,7 @@ export default async function AdminPage() {
       initialSettings={serializedSettings}
       initialStats={stats}
       adminUser={{
+        id: session.userId,
         name: session.name,
         email: session.email,
         role: session.role,

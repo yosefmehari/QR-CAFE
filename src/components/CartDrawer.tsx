@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/context/CartContext'
+import { getProductImage } from '@/lib/images'
 import {
   X,
   Plus,
@@ -617,15 +618,11 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
                   >
                     {/* Item Thumbnail */}
                     <div className="w-14 h-14 rounded-xl bg-zinc-200 dark:bg-zinc-800 overflow-hidden shrink-0 flex items-center justify-center border border-zinc-200/60 dark:border-zinc-700/60">
-                      {item.imageUrl ? (
-                        <img
-                          src={item.imageUrl}
-                          alt={item.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-2xl select-none">{item.emoji || '🍽️'}</span>
-                      )}
+                      <img
+                        src={getProductImage(item.imageUrl)}
+                        alt={item.name}
+                        className="w-full h-full object-cover"
+                      />
                     </div>
 
                     {/* Item Information */}

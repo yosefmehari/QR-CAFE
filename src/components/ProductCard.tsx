@@ -2,6 +2,7 @@
 
 import { Plus, Eye } from 'lucide-react'
 import type { ProductItem } from '@/lib/types'
+import { getProductImage } from '@/lib/images'
 
 interface ProductCardProps {
   product: ProductItem
@@ -41,24 +42,12 @@ export default function ProductCard({ product, onOpenDetails }: ProductCardProps
     >
       {/* Visual Header / Banner */}
       <div className="w-full h-40 sm:h-48 rounded-2xl bg-zinc-100 dark:bg-zinc-800 relative overflow-hidden mb-4">
-        {product.imageUrl ? (
-          <img
-            src={product.imageUrl}
-            alt={product.name}
-            loading="lazy"
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
-          />
-        ) : (
-          <div
-            className={`w-full h-full bg-gradient-to-br ${getGradientForCategory(
-              categorySlug
-            )} flex flex-col items-center justify-center`}
-          >
-            <span className="text-4xl sm:text-5xl select-none filter drop-shadow-sm group-hover:scale-110 transition-transform duration-300">
-              {product.category?.emoji || '🍽️'}
-            </span>
-          </div>
-        )}
+        <img
+          src={getProductImage(product.imageUrl, categorySlug)}
+          alt={product.name}
+          loading="lazy"
+          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 ease-out"
+        />
 
         {/* Soft bottom vignette for contrast */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20 pointer-events-none" />

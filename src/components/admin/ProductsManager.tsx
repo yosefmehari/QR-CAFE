@@ -13,6 +13,7 @@ import {
   Loader2,
 } from 'lucide-react'
 import type { AdminCategory } from './CategoriesManager'
+import { getProductImage } from '@/lib/images'
 
 export interface AdminProduct {
   id: string
@@ -306,15 +307,11 @@ export default function ProductsManager({
                     <td className="py-4 px-4 sm:px-6">
                       <div className="flex items-center gap-3">
                         <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-800 shrink-0 border border-zinc-700/60 flex items-center justify-center">
-                          {prod.imageUrl ? (
-                            <img
-                              src={prod.imageUrl}
-                              alt={prod.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <span className="text-2xl select-none">{prod.category?.emoji || '🍽️'}</span>
-                          )}
+                          <img
+                            src={getProductImage(prod.imageUrl, prod.category?.slug)}
+                            alt={prod.name}
+                            className="w-full h-full object-cover"
+                          />
                         </div>
                         <div>
                           <div className="font-bold text-white text-sm">
