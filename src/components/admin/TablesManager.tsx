@@ -22,6 +22,9 @@ export interface AdminTable {
   _count?: { orders: number }
 }
 
+import TableQRModal, { QRCodeSVG, QRCode, getAbsoluteTableUrl } from './TableQRModal'
+export { TableQRModal, QRCodeSVG, QRCode, getAbsoluteTableUrl }
+
 interface Props {
   initialTables: AdminTable[]
   onRefresh: () => void
@@ -40,8 +43,6 @@ export default function TablesManager({
 
   // QR Code preview modal
   const [previewTable, setPreviewTable] = useState<AdminTable | null>(null)
-  const [previewQrDataUrl, setPreviewQrDataUrl] = useState<string | null>(null)
-  const [isLoadingQr, setIsLoadingQr] = useState(false)
 
   // 1-Click Active Toggle
   const handleToggleActive = async (table: AdminTable) => {
@@ -62,21 +63,8 @@ export default function TablesManager({
     }
   }
 
-  const handleOpenQr = async (table: AdminTable) => {
+  const handleOpenQr = (table: AdminTable) => {
     setPreviewTable(table)
-    setPreviewQrDataUrl(null)
-    setIsLoadingQr(true)
-
-    try {
-      const res = await fetch(`/api/tables/${table.number}/qr`)
-      if (!res.ok) throw new Error('Failed to load QR code')
-      const data = await res.json()
-      setPreviewQrDataUrl(data.qrDataUrl)
-    } catch (e) {
-      console.error(e)
-    } finally {
-      setIsLoadingQr(false)
-    }
   }
 
   const handleCreateTable = async (e: React.FormEvent) => {
@@ -245,60 +233,10 @@ export default function TablesManager({
 
       {/* QR Preview Modal */}
       {previewTable && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-200"
-          onClick={() => setPreviewTable(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-sm bg-zinc-900 rounded-3xl border border-zinc-800 p-6 text-center space-y-4 animate-in zoom-in-95 duration-200 shadow-2xl"
-          >
-            <div className="flex items-center justify-between border-b border-zinc-800 pb-2">
-              <h3 className="text-base font-bold text-white">
-                Table #{previewTable.number} QR Stand
-              </h3>
-              <button
-                type="button"
-                onClick={() => setPreviewTable(null)}
-                className="text-zinc-500 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="p-4 bg-white rounded-2xl flex items-center justify-center min-h-[200px]">
-              {isLoadingQr ? (
-                <Loader2 className="w-8 h-8 animate-spin text-amber-600" />
-              ) : previewQrDataUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={previewQrDataUrl}
-                  alt={`QR for Table ${previewTable.number}`}
-                  className="w-48 h-48 object-contain"
-                />
-              ) : (
-                <p className="text-xs text-zinc-500">Failed to load QR code</p>
-              )}
-            </div>
-
-            <p className="text-xs font-mono text-zinc-400">
-              Target: /table/{previewTable.number}
-            </p>
-
-            {previewQrDataUrl && (
-              <a
-                href={previewQrDataUrl}
-                download={`table-${previewTable.number}-qr.png`}
-                className="w-full py-2.5 px-4 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs flex items-center justify-center gap-1.5 transition-colors shadow-md"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download PNG</span>
-              </a>
-            )}
-          </div>
-        </div>
+        <TableQRModal
+          table={previewTable}
+          onClose={() => setPreviewTable(null)}
+        />
       )}
 
       {/* Create Table Modal */}

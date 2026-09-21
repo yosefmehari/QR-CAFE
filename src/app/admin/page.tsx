@@ -1,5 +1,6 @@
 import { db } from '@/lib/db'
 import { requireAuth } from '@/lib/authGuard'
+import { isOwner } from '@/lib/owner'
 import AdminDashboardClient, { AdminStats } from '@/components/admin/AdminDashboardClient'
 import type { Metadata } from 'next'
 
@@ -59,7 +60,9 @@ export default async function AdminPage() {
   }
 
   // 6. Fetch real Staff from PostgreSQL
-  const staff = await db.user.findMany({
+  const isCurrentUserOwner = isOwner(session)
+
+  const allStaff = await db.user.findMany({
     select: {
       id: true,
       name: true,
@@ -69,6 +72,11 @@ export default async function AdminPage() {
     },
     orderBy: { createdAt: 'asc' },
   })
+
+  // The admin owner cannot be viewed by regular admins, but the owner can view all
+  const staff = isCurrentUserOwner
+    ? allStaff
+    : allStaff.filter((s) => !isOwner(s))
 
   // Serialize types for client component
   const serializedProducts = products.map((p) => ({

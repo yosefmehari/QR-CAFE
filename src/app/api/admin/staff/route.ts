@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
+import { isOwner } from '@/lib/owner'
 import bcrypt from 'bcryptjs'
 
-// GET /api/admin/staff - List all staff accounts
+// GET /api/admin/staff - List staff accounts (Admin cannot view owner; Owner views all)
 export async function GET() {
   try {
     const session = await getSession()
@@ -11,7 +12,9 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized. Admin access required.' }, { status: 401 })
     }
 
-    const staff = await db.user.findMany({
+    const isCurrentUserOwner = isOwner(session)
+
+    const allStaff = await db.user.findMany({
       select: {
         id: true,
         name: true,
@@ -21,6 +24,11 @@ export async function GET() {
       },
       orderBy: { createdAt: 'asc' },
     })
+
+    // The admin owner can not be viewed by regular admins, but the owner can view all
+    const staff = isCurrentUserOwner
+      ? allStaff
+      : allStaff.filter((s) => !isOwner(s))
 
     return NextResponse.json(staff)
   } catch (error) {
@@ -42,6 +50,14 @@ export async function POST(request: NextRequest) {
 
     if (!name?.trim() || !email?.trim() || !password?.trim()) {
       return NextResponse.json({ error: 'Name, email, and password are required' }, { status: 400 })
+    }
+
+    const isCurrentUserOwner = isOwner(session)
+    if (!isCurrentUserOwner && isOwner({ email, name })) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Only the cafe owner can create owner accounts.' },
+        { status: 403 }
+      )
     }
 
     const existing = await db.user.findUnique({

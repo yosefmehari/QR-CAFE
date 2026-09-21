@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 
 export type UserRole = 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER' | 'DELIVERY'
 
+export { isOwner, OWNER_EMAIL } from './owner'
+
 export interface SessionPayload {
   userId: string
   email: string

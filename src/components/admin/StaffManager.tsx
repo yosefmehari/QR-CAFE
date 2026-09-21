@@ -5,6 +5,7 @@ import {
   Users,
   Plus,
   ShieldCheck,
+  Crown,
   ChefHat,
   Trash2,
   KeyRound,
@@ -22,6 +23,7 @@ import {
   Sparkles,
   RefreshCw,
 } from 'lucide-react'
+import { isOwner } from '@/lib/owner'
 
 export interface AdminStaffUser {
   id: string
@@ -34,6 +36,7 @@ export interface AdminStaffUser {
 interface Props {
   initialStaff: AdminStaffUser[]
   currentUserId: string
+  isCurrentUserOwner?: boolean
   onRefresh: () => void
   showToast: (msg: string) => void
 }
@@ -50,10 +53,17 @@ function generateRandomPassword(): string {
 export default function StaffManager({
   initialStaff,
   currentUserId,
+  isCurrentUserOwner = false,
   onRefresh,
   showToast,
 }: Props) {
-  const [staff, setStaff] = useState<AdminStaffUser[]>(initialStaff)
+  // Security sanitizer: Regular admin cannot view or access the owner account
+  const sanitizeStaff = (list: AdminStaffUser[]) => {
+    if (isCurrentUserOwner) return list
+    return list.filter((s) => !isOwner(s))
+  }
+
+  const [staff, setStaff] = useState<AdminStaffUser[]>(() => sanitizeStaff(initialStaff))
   const [roleFilter, setRoleFilter] = useState<'ALL' | 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER' | 'DELIVERY'>('ALL')
   const [searchQuery, setSearchQuery] = useState('')
 
@@ -85,30 +95,33 @@ export default function StaffManager({
   const [prevStaff, setPrevStaff] = useState(initialStaff)
   if (initialStaff !== prevStaff) {
     setPrevStaff(initialStaff)
-    setStaff(initialStaff)
+    setStaff(sanitizeStaff(initialStaff))
   }
 
   // Filter staff by role & search query
   const filteredStaff = useMemo(() => {
     const q = searchQuery.toLowerCase().trim()
     return staff.filter((s) => {
+      // Ensure admin cannot view owner under any condition
+      if (!isCurrentUserOwner && isOwner(s)) return false
       const matchesRole = roleFilter === 'ALL' || s.role === roleFilter
       const matchesSearch = !q || s.name.toLowerCase().includes(q) || s.email.toLowerCase().includes(q)
       return matchesRole && matchesSearch
     })
-  }, [staff, roleFilter, searchQuery])
+  }, [staff, roleFilter, searchQuery, isCurrentUserOwner])
 
   // Count per role
   const counts = useMemo(() => {
+    const visible = isCurrentUserOwner ? staff : staff.filter((s) => !isOwner(s))
     return {
-      ALL: staff.length,
-      ADMIN: staff.filter((s) => s.role === 'ADMIN').length,
-      KITCHEN: staff.filter((s) => s.role === 'KITCHEN').length,
-      JUICE_MAKER: staff.filter((s) => s.role === 'JUICE_MAKER').length,
-      WAITER: staff.filter((s) => s.role === 'WAITER').length,
-      DELIVERY: staff.filter((s) => s.role === 'DELIVERY').length,
+      ALL: visible.length,
+      ADMIN: visible.filter((s) => s.role === 'ADMIN').length,
+      KITCHEN: visible.filter((s) => s.role === 'KITCHEN').length,
+      JUICE_MAKER: visible.filter((s) => s.role === 'JUICE_MAKER').length,
+      WAITER: visible.filter((s) => s.role === 'WAITER').length,
+      DELIVERY: visible.filter((s) => s.role === 'DELIVERY').length,
     }
-  }, [staff])
+  }, [staff, isCurrentUserOwner])
 
   const handleCreateStaff = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -116,6 +129,11 @@ export default function StaffManager({
 
     if (!name.trim() || !email.trim() || !password.trim()) {
       setErrorMessage('Please fill in all required fields.')
+      return
+    }
+
+    if (!isCurrentUserOwner && (name.toLowerCase().includes('owner') || email.toLowerCase() === 'admin@qrcafe.com')) {
+      setErrorMessage('Only the cafe owner can create owner accounts.')
       return
     }
 
@@ -168,6 +186,11 @@ export default function StaffManager({
 
     if (!editName.trim()) {
       setEditError('Name cannot be empty.')
+      return
+    }
+
+    if (!isCurrentUserOwner && editName.toLowerCase().includes('owner')) {
+      setEditError('Only the cafe owner can assign owner designations.')
       return
     }
 
@@ -232,6 +255,11 @@ export default function StaffManager({
       return
     }
 
+    if (isOwner(member)) {
+      alert('The admin owner account is protected and cannot be deleted.')
+      return
+    }
+
     const confirmed = window.confirm(`Are you sure you want to permanently delete staff member ${member.name} (${member.email})?`)
     if (!confirmed) return
 
@@ -263,12 +291,20 @@ export default function StaffManager({
       {/* Top Header Card */}
       <div className="bg-zinc-900 rounded-3xl p-5 sm:p-6 border border-zinc-800 shadow-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl font-black text-white flex items-center gap-2.5">
+          <h2 className="text-xl font-black text-white flex items-center gap-2.5 flex-wrap">
             <Users className="w-5 h-5 text-amber-500" />
             <span>Staff Management &amp; Access Control</span>
+            {isCurrentUserOwner && (
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border border-amber-500/40 flex items-center gap-1 shadow-sm">
+                <Crown className="w-3 h-3 text-amber-400" />
+                <span>Owner Master View</span>
+              </span>
+            )}
           </h2>
           <p className="text-xs text-zinc-400 mt-0.5">
-            View all staff members, assign roles, edit details, set individual passwords, or remove accounts.
+            {isCurrentUserOwner
+              ? 'Owner Master View: You can view, manage, and configure all administrator and staff accounts.'
+              : 'View all cafe staff members, assign roles, edit details, set individual passwords, or remove accounts.'}
           </p>
         </div>
 
@@ -363,6 +399,7 @@ export default function StaffManager({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {filteredStaff.map((member) => {
             const isCurrentUser = member.id === currentUserId || member.email === currentUserId
+            const isMemberOwner = isOwner(member)
             const isAdmin = member.role === 'ADMIN'
             const isKitchen = member.role === 'KITCHEN'
             const isJuice = member.role === 'JUICE_MAKER'
@@ -372,38 +409,56 @@ export default function StaffManager({
             return (
               <div
                 key={member.id}
-                className="bg-zinc-900 rounded-3xl p-5 border border-zinc-800 shadow-lg relative flex flex-col justify-between group hover:border-zinc-700 transition-all"
+                className={`bg-zinc-900 rounded-3xl p-5 border shadow-lg relative flex flex-col justify-between group transition-all ${
+                  isMemberOwner
+                    ? 'border-amber-500/40 bg-gradient-to-b from-amber-500/5 to-zinc-900 hover:border-amber-500/60'
+                    : 'border-zinc-800 hover:border-zinc-700'
+                }`}
               >
                 <div>
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="w-10 h-10 rounded-2xl bg-zinc-800 border border-zinc-700/80 flex items-center justify-center text-white shrink-0">
-                      {isAdmin && <ShieldCheck className="w-5 h-5 text-amber-400" />}
+                    <div
+                      className={`w-10 h-10 rounded-2xl border flex items-center justify-center text-white shrink-0 ${
+                        isMemberOwner
+                          ? 'bg-amber-500/20 border-amber-500/40 text-amber-400'
+                          : 'bg-zinc-800 border-zinc-700/80'
+                      }`}
+                    >
+                      {isMemberOwner && <Crown className="w-5 h-5 text-amber-400" />}
+                      {!isMemberOwner && isAdmin && <ShieldCheck className="w-5 h-5 text-amber-400" />}
                       {isKitchen && <ChefHat className="w-5 h-5 text-orange-400" />}
                       {isJuice && <Coffee className="w-5 h-5 text-fuchsia-400" />}
                       {isWaiter && <Bell className="w-5 h-5 text-cyan-400" />}
                       {isDelivery && <Bike className="w-5 h-5 text-teal-400" />}
                     </div>
 
-                    <div className="flex items-center gap-1.5">
-                      <span
-                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
-                          isAdmin
-                            ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                            : isKitchen
-                              ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
-                              : isJuice
-                                ? 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20'
-                                : isWaiter
-                                  ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
-                                  : 'bg-teal-500/10 text-teal-400 border-teal-500/20'
-                        }`}
-                      >
-                        {member.role === 'JUICE_MAKER'
-                          ? 'JUICE MAKER'
-                          : member.role === 'DELIVERY'
-                            ? 'DELIVERY'
-                            : member.role}
-                      </span>
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {isMemberOwner ? (
+                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black border bg-gradient-to-r from-amber-500/20 to-yellow-500/20 text-amber-300 border-amber-500/40 flex items-center gap-1 shadow-sm">
+                          <Crown className="w-3 h-3 text-amber-400" />
+                          <span>OWNER</span>
+                        </span>
+                      ) : (
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border ${
+                            isAdmin
+                              ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                              : isKitchen
+                                ? 'bg-orange-500/10 text-orange-400 border-orange-500/20'
+                                : isJuice
+                                  ? 'bg-fuchsia-500/10 text-fuchsia-400 border-fuchsia-500/20'
+                                  : isWaiter
+                                    ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20'
+                                    : 'bg-teal-500/10 text-teal-400 border-teal-500/20'
+                          }`}
+                        >
+                          {member.role === 'JUICE_MAKER'
+                            ? 'JUICE MAKER'
+                            : member.role === 'DELIVERY'
+                              ? 'DELIVERY'
+                              : member.role}
+                        </span>
+                      )}
                       {isCurrentUser && (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
                           You
@@ -453,7 +508,7 @@ export default function StaffManager({
                   </div>
 
                   {/* Delete Button */}
-                  {!isCurrentUser ? (
+                  {!isCurrentUser && !isMemberOwner ? (
                     <button
                       type="button"
                       onClick={() => handleDeleteStaff(member)}
@@ -462,8 +517,10 @@ export default function StaffManager({
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
-                  ) : (
+                  ) : isCurrentUser ? (
                     <span className="text-[10px] text-zinc-500 font-medium italic">Active Session</span>
+                  ) : (
+                    <span className="text-[10px] text-amber-500/80 font-medium italic">Protected Owner</span>
                   )}
                 </div>
               </div>

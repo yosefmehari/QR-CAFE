@@ -168,7 +168,7 @@ export default function TablesDirectoryClient({ tables }: Props) {
                 </div>
 
                 <p className="mt-3 text-[11px] font-mono text-zinc-400 break-all px-2 select-all">
-                  /table/{table.number}
+                  Target: {table.targetUrl}
                 </p>
 
                 {/* Actions (hidden in print mode) */}

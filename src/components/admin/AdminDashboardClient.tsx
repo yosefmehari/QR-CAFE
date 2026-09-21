@@ -10,8 +10,10 @@ import AnalyticsManager from './AnalyticsManager'
 import StaffManager, { AdminStaffUser } from './StaffManager'
 import BankSettingsManager, { CafeBankSettings } from './BankSettingsManager'
 import LogoutButton from '@/components/LogoutButton'
+import { isOwner } from '@/lib/owner'
 import {
   ShieldCheck,
+  Crown,
   LayoutDashboard,
   Utensils,
   FolderTree,
@@ -219,12 +221,22 @@ export default function AdminDashboardClient({
                 <span className="font-extrabold text-base sm:text-lg text-white">
                   Aroma &amp; Fork Admin
                 </span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                  {adminUser.role}
+                <span
+                  className={`px-2 py-0.5 rounded-full text-[10px] font-bold border flex items-center gap-1 ${
+                    isOwner(adminUser)
+                      ? 'bg-amber-500/20 text-amber-300 border-amber-500/40 shadow-sm'
+                      : 'bg-amber-500/20 text-amber-400 border-amber-500/30'
+                  }`}
+                >
+                  {isOwner(adminUser) && <Crown className="w-3 h-3 text-amber-400" />}
+                  <span>{isOwner(adminUser) ? 'ADMIN (OWNER)' : adminUser.role}</span>
                 </span>
               </div>
               <p className="text-xs text-zinc-400 hidden sm:block">
                 Signed in as {adminUser.name} ({adminUser.email})
+                {isOwner(adminUser) && (
+                  <span className="text-amber-400 font-medium ml-1.5">• Owner Master Access</span>
+                )}
               </p>
             </div>
           </div>
@@ -709,6 +721,7 @@ export default function AdminDashboardClient({
             <StaffManager
               initialStaff={staff}
               currentUserId={adminUser.id || adminUser.email}
+              isCurrentUserOwner={isOwner(adminUser)}
               onRefresh={refreshAll}
               showToast={showToast}
             />

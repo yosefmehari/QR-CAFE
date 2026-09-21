@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getSession } from '@/lib/auth'
+import { isOwner } from '@/lib/owner'
 import bcrypt from 'bcryptjs'
 
 // PATCH /api/admin/staff/[id] - Update staff role or reset password
@@ -15,8 +16,35 @@ export async function PATCH(
     }
 
     const { id } = await context.params
+    const targetUser = await db.user.findUnique({
+      where: { id },
+    })
+
+    if (!targetUser) {
+      return NextResponse.json({ error: 'Staff member not found' }, { status: 404 })
+    }
+
+    const isCurrentUserOwner = isOwner(session)
+    const isTargetOwner = isOwner(targetUser)
+
+    // Admin cannot view, modify, or reset password of the owner account
+    if (isTargetOwner && !isCurrentUserOwner) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Admins cannot view or modify the admin owner account.' },
+        { status: 403 }
+      )
+    }
+
     const body = await request.json()
     const { name, role, password } = body
+
+    // Non-owner cannot rename someone to Owner
+    if (!isCurrentUserOwner && name && isOwner({ name })) {
+      return NextResponse.json(
+        { error: 'Unauthorized. Only the owner can designate owner status.' },
+        { status: 403 }
+      )
+    }
 
     const data: { name?: string; role?: 'ADMIN' | 'KITCHEN' | 'JUICE_MAKER' | 'WAITER' | 'DELIVERY'; password?: string } = {}
 
@@ -60,6 +88,22 @@ export async function DELETE(
 
     if (session.userId === id) {
       return NextResponse.json({ error: 'You cannot delete your own account' }, { status: 400 })
+    }
+
+    const targetUser = await db.user.findUnique({
+      where: { id },
+    })
+
+    if (!targetUser) {
+      return NextResponse.json({ error: 'Staff member not found' }, { status: 404 })
+    }
+
+    // Protect owner account from deletion by anyone
+    if (isOwner(targetUser)) {
+      return NextResponse.json(
+        { error: 'The admin owner account is protected and cannot be deleted.' },
+        { status: 403 }
+      )
     }
 
     await db.user.delete({

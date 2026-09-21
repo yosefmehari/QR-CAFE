@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSession } from '@/lib/auth'
+import { getSession, isOwner } from '@/lib/auth'
 
 export async function GET() {
   const session = await getSession()
@@ -15,6 +15,7 @@ export async function GET() {
       email: session.email,
       name: session.name,
       role: session.role,
+      isOwner: isOwner(session),
     },
   })
 }

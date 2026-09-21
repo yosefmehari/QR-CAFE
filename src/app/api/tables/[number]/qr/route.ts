@@ -30,8 +30,15 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
   }
 
   // Build the target dining URL
-  const origin = request.nextUrl.origin
-  const targetUrl = `${origin}/table/${table.number}`
+  const searchParams = request.nextUrl.searchParams
+  const customTargetUrl = searchParams.get('targetUrl') || searchParams.get('url')
+
+  const forwardedProto = request.headers.get('x-forwarded-proto') || 'https'
+  const forwardedHost = request.headers.get('x-forwarded-host') || request.headers.get('host')
+  const hostOrigin = forwardedHost ? `${forwardedProto}://${forwardedHost}` : request.nextUrl.origin
+  const baseUrl = (process.env.NEXT_PUBLIC_APP_URL?.trim() || hostOrigin).replace(/\/$/, '')
+
+  const targetUrl = customTargetUrl || `${baseUrl}/table/${table.number}`
 
   // Generate Base64 QR code image
   const qrDataUrl = await generateQRCodeDataUrl(targetUrl, {
