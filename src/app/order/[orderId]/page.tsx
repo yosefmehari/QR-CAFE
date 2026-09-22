@@ -24,6 +24,9 @@ export default async function OrderPage({ params }: Props) {
     where: { id: orderId },
     include: {
       table: true,
+      complaints: {
+        orderBy: { createdAt: 'desc' },
+      },
       items: {
         include: {
           product: {
@@ -59,6 +62,16 @@ export default async function OrderPage({ params }: Props) {
     tableNumber: order.table?.number ?? null,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    complaints: (order.complaints || []).map((c) => ({
+      id: c.id,
+      category: c.category,
+      items: c.items,
+      details: c.details,
+      desiredAction: c.desiredAction,
+      status: c.status,
+      staffNotes: c.staffNotes,
+      createdAt: c.createdAt.toISOString(),
+    })),
     items: order.items.map((item) => ({
       id: item.id,
       name: item.product.name,

@@ -17,8 +17,11 @@ import {
   Bike,
   MapPin,
   Phone,
+  AlertTriangle,
+  MessageSquare,
 } from 'lucide-react'
 import { getProductImage } from '@/lib/images'
+import OrderComplaintModal from './OrderComplaintModal'
 
 export type OrderStatus =
   | 'PENDING'
@@ -37,6 +40,17 @@ export interface TrackedItem {
   quantity: number
   unitPrice: number
   notes?: string | null
+}
+
+export interface TrackedComplaint {
+  id: string
+  category: string
+  items?: string | null
+  details: string
+  desiredAction?: string | null
+  status: string
+  staffNotes?: string | null
+  createdAt: string | Date
 }
 
 export interface TrackedOrder {
@@ -58,6 +72,7 @@ export interface TrackedOrder {
   tableNumber?: number | null
   createdAt: string | Date
   updatedAt: string | Date
+  complaints?: TrackedComplaint[]
   items: TrackedItem[]
 }
 
@@ -145,13 +160,29 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
   const [order, setOrder] = useState<TrackedOrder>(initialOrder)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
+  const [isComplaintModalOpen, setIsComplaintModalOpen] = useState(false)
 
   const isDelivery = order.orderType === 'DELIVERY'
   const currentSteps = isDelivery ? DELIVERY_STATUS_STEPS : DINE_IN_STATUS_STEPS
 
-  // Save active order to local storage for quick access from the menu
+  // Check URL query to automatically open complaint/return modal if requested
   useEffect(() => {
     if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search)
+      if (params.get('report') === 'true' || params.get('return') === 'true') {
+        setIsComplaintModalOpen(true)
+      }
+    }
+  }, [])
+
+  // Save active and last order to local storage for quick access from the menu
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('qr_cafe_last_order_id', order.id)
+      localStorage.setItem('qr_cafe_last_order_time', String(Date.now()))
+      if (order.tableNumber) {
+        localStorage.setItem('qr_cafe_last_order_table', String(order.tableNumber))
+      }
       if (order.status !== 'SERVED' && order.status !== 'CANCELLED') {
         localStorage.setItem('qr_cafe_active_order_id', order.id)
         if (order.tableNumber) {
@@ -244,17 +275,29 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
             <span>{order.tableNumber ? `Back to Menu (Table #${order.tableNumber})` : 'Back to Menu'}</span>
           </Link>
 
-          <button
-            type="button"
-            onClick={handleManualRefresh}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all cursor-pointer shadow-xs"
-          >
-            <RefreshCw
-              className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-500' : ''}`}
-            />
-            <span>{isRefreshing ? 'Refreshing...' : 'Live Sync'}</span>
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsComplaintModalOpen(true)}
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/50 dark:hover:bg-rose-900/60 border border-rose-200 dark:border-rose-900/80 text-rose-600 dark:text-rose-400 transition-all cursor-pointer shadow-xs"
+              title="Return food, request remake, or report an issue"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 text-rose-500" />
+              <span>Return Food / Report Issue</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleManualRefresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-all cursor-pointer shadow-xs"
+            >
+              <RefreshCw
+                className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-amber-500' : ''}`}
+              />
+              <span>{isRefreshing ? 'Refreshing...' : 'Live Sync'}</span>
+            </button>
+          </div>
         </div>
 
         {/* Main Status Hero Card */}
@@ -578,6 +621,155 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
             )}
           </div>
 
+          {/* Customer Complaint & Food Quality Feedback Section */}
+          <div className="p-6 sm:p-8 bg-zinc-50/50 dark:bg-zinc-950/40 border-t border-zinc-100 dark:border-zinc-800 space-y-4">
+            {order.complaints && order.complaints.length > 0 ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Reported Food / Order Issues ({order.complaints.length})</span>
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsComplaintModalOpen(true)}
+                    className="text-[11px] font-bold text-rose-600 dark:text-rose-400 hover:underline cursor-pointer flex items-center gap-1"
+                  >
+                    <span>+ Report Another Issue</span>
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {order.complaints.map((c) => {
+                    const isReviewing = c.status === 'REVIEWING'
+                    const isResolved = c.status === 'RESOLVED'
+
+                    return (
+                      <div
+                        key={c.id}
+                        className={`p-4 rounded-2xl border text-xs space-y-2 transition-all ${
+                          isResolved
+                            ? 'bg-emerald-500/5 border-emerald-500/30'
+                            : isReviewing
+                            ? 'bg-blue-500/5 border-blue-500/30 ring-1 ring-blue-500/20'
+                            : 'bg-rose-500/5 border-rose-500/30'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div>
+                            <span className="font-extrabold text-zinc-900 dark:text-zinc-100 block">
+                              {c.category === 'DISLIKE_FOOD'
+                                ? "👎 Don't Like Food / Taste"
+                                : c.category === 'FOOD_QUALITY'
+                                ? '🍲 Food Not Good / Quality Issue'
+                                : c.category === 'RETURN_DISH'
+                                ? '🔁 Food Return Requested'
+                                : c.category === 'COLD_FOOD'
+                                ? '❄️ Cold Food Issue'
+                                : c.category === 'WRONG_ITEM'
+                                ? '❌ Wrong Dish Received'
+                                : c.category === 'MISSING_ITEM'
+                                ? '🔍 Missing Item / Side'
+                                : c.category === 'HYGIENE'
+                                ? '⚠️ Hygiene / Quality Issue'
+                                : c.category === 'DELAY'
+                                ? '⏳ Excessive Delay'
+                                : '💬 Order Issue'}
+                            </span>
+                            {c.items && (
+                              <span className="text-[11px] text-zinc-500 dark:text-zinc-400 font-medium">
+                                Dish: {c.items}
+                              </span>
+                            )}
+                          </div>
+
+                          <span
+                            className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${
+                              isResolved
+                                ? 'bg-emerald-500/15 text-emerald-600 border-emerald-500/30'
+                                : isReviewing
+                                ? 'bg-blue-500/15 text-blue-600 border-blue-500/30 animate-pulse'
+                                : 'bg-rose-500/15 text-rose-600 border-rose-500/30'
+                            }`}
+                          >
+                            {isResolved
+                              ? '✓ Resolved'
+                              : isReviewing
+                              ? 'Staff Attending Table'
+                              : (c.desiredAction?.startsWith('RETURN') || c.category === 'RETURN_DISH')
+                              ? 'Pending Pickup'
+                              : 'Pending Staff Response'}
+                          </span>
+                        </div>
+
+                        <p className="text-zinc-600 dark:text-zinc-300 italic bg-white/60 dark:bg-zinc-900/60 p-2.5 rounded-xl border border-zinc-200/50 dark:border-zinc-800">
+                          &quot;{c.details}&quot;
+                        </p>
+
+                        {c.desiredAction && (
+                          <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
+                            Requested action:{' '}
+                            <strong className="text-zinc-800 dark:text-zinc-200">
+                              {c.desiredAction === 'RETURN_REFUND'
+                                ? '💰 Return Dish & Full Refund'
+                                : c.desiredAction === 'RETURN_EXCHANGE'
+                                ? '🔁 Return Dish & Replace with Another Dish'
+                                : c.desiredAction === 'REMAKE'
+                                ? '🔥 Remake Same Dish Fresh'
+                                : c.desiredAction === 'CALL_STAFF'
+                                ? '🙋 Waiter Coming to Table'
+                                : c.desiredAction === 'FEEDBACK'
+                                ? '💬 Kitchen Feedback Only'
+                                : c.desiredAction}
+                            </strong>
+                          </div>
+                        )}
+
+                        {(c.desiredAction?.startsWith('RETURN') || c.category === 'RETURN_DISH') && !isResolved && (
+                          <div className="p-2 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-800 dark:text-rose-300 text-[11px]">
+                            <strong>Dish Return Notice:</strong> Please leave the dish on your table. Floor staff is notified to collect it.
+                          </div>
+                        )}
+
+                        {c.staffNotes && (
+                          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-900 dark:text-emerald-200 text-[11px] space-y-0.5">
+                            <span className="font-bold block">Response from Manager / Kitchen:</span>
+                            <p>{c.staffNotes}</p>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-amber-500/10 via-orange-500/5 to-transparent border border-dashed border-amber-500/30 dark:border-zinc-700 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-amber-500/15 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0 font-bold">
+                    <Sparkles className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs sm:text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                      Food not good, cold, don&apos;t like it, or want to return it?
+                    </h4>
+                    <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5 max-w-md leading-relaxed">
+                      <strong>100% Satisfaction Guarantee:</strong> If you don&apos;t enjoy your meal, we will gladly take the dish back, remake it fresh, exchange it, or refund you immediately!
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsComplaintModalOpen(true)}
+                  className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                >
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  <span>Return Food / Complain</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Action Footer */}
           <div className="p-6 bg-zinc-50 dark:bg-zinc-950/60 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3">
             <Link
@@ -596,6 +788,14 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
             </Link>
           </div>
         </div>
+
+        {/* Order Complaint Modal */}
+        <OrderComplaintModal
+          order={order}
+          isOpen={isComplaintModalOpen}
+          onClose={() => setIsComplaintModalOpen(false)}
+          onComplaintSubmitted={handleManualRefresh}
+        />
       </div>
     </div>
   )

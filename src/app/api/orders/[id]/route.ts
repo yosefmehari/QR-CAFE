@@ -13,6 +13,9 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       where: { id },
       include: {
         table: true,
+        complaints: {
+          orderBy: { createdAt: 'desc' },
+        },
         items: {
           include: {
             product: {
@@ -51,6 +54,7 @@ export async function GET(request: NextRequest, { params }: RouteContext) {
       tableNumber: order.table ? order.table.number : null,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
+      complaints: order.complaints || [],
       items: order.items.map((item) => ({
         id: item.id,
         name: item.product.name,

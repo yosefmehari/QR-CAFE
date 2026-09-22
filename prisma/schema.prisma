@@ -88,6 +88,7 @@ model Order {
   totalPrice        Decimal       @db.Decimal(10, 2)
   notes             String?
   items             OrderItem[]
+  complaints        OrderComplaint[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 }
@@ -145,3 +146,23 @@ model OrderItem {
   unitPrice Decimal @db.Decimal(10, 2)
   notes     String?
 }
+
+// ─── ORDER COMPLAINTS & QUALITY ISSUES ───────────────────────────────────────
+
+model OrderComplaint {
+  id            String   @id @default(cuid())
+  order         Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  orderId       String
+  category      String   // FOOD_QUALITY, COLD_FOOD, WRONG_ITEM, MISSING_ITEM, DELAY, OTHER
+  items         String?  // affected items description
+  details       String   // customer complaint details
+  desiredAction String?  // REMAKE, CALL_STAFF, REFUND, FEEDBACK
+  status        String   @default("PENDING") // PENDING, REVIEWING, RESOLVED, DISMISSED
+  staffNotes    String?  // resolution notes by manager/staff
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([orderId])
+  @@index([status])
+}
+

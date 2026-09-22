@@ -29,6 +29,17 @@ export interface AdminOrderItem {
   }
 }
 
+export interface AdminComplaintRecord {
+  id: string
+  category: string
+  items?: string | null
+  details: string
+  desiredAction?: string | null
+  status: string
+  staffNotes?: string | null
+  createdAt: string
+}
+
 export interface AdminOrderRecord {
   id: string
   status: 'PENDING' | 'CONFIRMED' | 'PREPARING' | 'READY' | 'OUT_FOR_DELIVERY' | 'SERVED' | 'CANCELLED'
@@ -49,6 +60,7 @@ export interface AdminOrderRecord {
     id: string
     number: number
   } | null
+  complaints?: AdminComplaintRecord[]
   items: AdminOrderItem[]
 }
 
@@ -68,7 +80,7 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
   const fetchOrders = useCallback(async () => {
     try {
       let url = '/api/admin/orders?'
-      if (statusFilter !== 'ALL') url += `status=${statusFilter}&`
+      if (statusFilter !== 'ALL' && statusFilter !== 'COMPLAINTS') url += `status=${statusFilter}&`
       if (paymentFilter !== 'ALL') url += `paymentStatus=${paymentFilter}&`
       if (searchQuery.trim()) url += `search=${encodeURIComponent(searchQuery)}&`
 
@@ -185,6 +197,11 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
     }
   }
 
+  const displayedOrders =
+    statusFilter === 'COMPLAINTS'
+      ? orders.filter((o) => o.complaints && o.complaints.length > 0)
+      : orders
+
   return (
     <div className="space-y-6">
       {/* Controls Bar */}
@@ -236,19 +253,31 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
 
           {/* Status Filter Tabs */}
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0 scrollbar-none">
-            {['ALL', 'PENDING', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'].map((st) => (
-              <button
-                key={st}
-                onClick={() => setStatusFilter(st)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer ${
-                  statusFilter === st
-                    ? 'bg-amber-500 text-white shadow'
-                    : 'bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-800'
-                }`}
-              >
-                {st}
-              </button>
-            ))}
+            {['ALL', 'COMPLAINTS', 'PENDING', 'PREPARING', 'READY', 'SERVED', 'CANCELLED'].map((st) => {
+              const complaintsCount = orders.filter((o) => o.complaints && o.complaints.length > 0).length
+              return (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+                    statusFilter === st
+                      ? st === 'COMPLAINTS'
+                        ? 'bg-rose-600 text-white shadow'
+                        : 'bg-amber-500 text-white shadow'
+                      : st === 'COMPLAINTS'
+                      ? 'bg-rose-950/40 text-rose-300 hover:bg-rose-900/60 border border-rose-500/30'
+                      : 'bg-zinc-800/60 text-zinc-400 hover:text-white hover:bg-zinc-800'
+                  }`}
+                >
+                  <span>{st === 'COMPLAINTS' ? '🚨 RETURNS / ISSUES' : st}</span>
+                  {st === 'COMPLAINTS' && complaintsCount > 0 && (
+                    <span className="px-1.5 py-0.2 rounded-full bg-rose-500 text-white text-[10px] font-mono">
+                      {complaintsCount}
+                    </span>
+                  )}
+                </button>
+              )
+            })}
           </div>
         </div>
 
@@ -343,7 +372,7 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
             <RefreshCw className="w-6 h-6 animate-spin text-amber-500" />
             <span>Loading orders...</span>
           </div>
-        ) : orders.length === 0 ? (
+        ) : displayedOrders.length === 0 ? (
           <div className="py-20 text-center text-zinc-500 text-sm flex flex-col items-center gap-3">
             <Utensils className="w-8 h-8 text-zinc-600" />
             <span>No orders match the selected filters.</span>
@@ -362,7 +391,7 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                 </tr>
               </thead>
               <tbody className="divide-y divide-zinc-800/60">
-                {orders.map((order) => {
+                {displayedOrders.map((order) => {
                   const itemCount = order.items.reduce((s, i) => s + i.quantity, 0)
                   return (
                     <tr key={order.id} className="hover:bg-zinc-800/30 transition-colors">
@@ -389,6 +418,19 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                             {order.notes && (
                               <span className="text-[10px] text-amber-400/90 truncate max-w-[120px] block">
                                 💬 {order.notes}
+                              </span>
+                            )}
+                            {order.complaints && order.complaints.length > 0 && (
+                              <span className="inline-flex items-center gap-1 text-[10px] font-bold text-rose-300 bg-rose-500/20 border border-rose-500/40 px-1.5 py-0.5 rounded-md mt-1 animate-pulse">
+                                <AlertCircle className="w-3 h-3 text-rose-400" />
+                                <span>
+                                  {order.complaints[0].desiredAction?.startsWith('RETURN') || order.complaints[0].category === 'RETURN_DISH'
+                                    ? '🚨 Return: '
+                                    : 'Issue: '}
+                                  {order.complaints[0].category === 'DISLIKE_FOOD'
+                                    ? "Don't Like Food"
+                                    : order.complaints[0].category.replace(/_/g, ' ')}
+                                </span>
                               </span>
                             )}
                           </div>
@@ -603,6 +645,132 @@ export default function OrdersManager({ onOrderUpdated }: OrdersManagerProps) {
                   <div>
                     <span className="font-bold">Customer Instructions:</span> {selectedOrder.notes}
                   </div>
+                </div>
+              )}
+
+              {/* Customer Complaints & Food Quality Issues */}
+              {selectedOrder.complaints && selectedOrder.complaints.length > 0 && (
+                <div className="p-4 rounded-2xl bg-rose-950/40 border-2 border-rose-900/80 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-rose-400 uppercase tracking-wider flex items-center gap-1.5">
+                      <AlertCircle className="w-4 h-4 text-rose-400" />
+                      <span>Customer Food Issue ({selectedOrder.complaints.length})</span>
+                    </span>
+                  </div>
+
+                  {selectedOrder.complaints.map((c) => (
+                    <div key={c.id} className="p-3 bg-zinc-900/90 rounded-xl border border-zinc-800 text-xs space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="font-bold text-white block">
+                            {c.category === 'DISLIKE_FOOD'
+                              ? "Don't Like Food / Taste"
+                              : c.category === 'RETURN_DISH'
+                              ? 'Return Food Request'
+                              : c.category.replace(/_/g, ' ')}
+                          </span>
+                          {c.items && <span className="text-[11px] text-zinc-400 block">Affected dish: {c.items}</span>}
+                        </div>
+                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          c.status === 'RESOLVED'
+                            ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                            : c.status === 'REVIEWING'
+                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                            : 'bg-rose-500/20 text-rose-400 border border-rose-500/30'
+                        }`}>
+                          {c.status}
+                        </span>
+                      </div>
+
+                      <p className="text-zinc-200 italic bg-zinc-950/80 p-2.5 rounded-xl border border-zinc-800">
+                        &quot;{c.details}&quot;
+                      </p>
+
+                      {c.desiredAction && (
+                        <div className="text-[11px] text-zinc-400">
+                          Customer requested: <strong className="text-amber-400 font-bold">{c.desiredAction.replace(/_/g, ' ')}</strong>
+                        </div>
+                      )}
+
+                      {c.staffNotes && (
+                        <div className="text-[11px] text-emerald-300 bg-emerald-950/40 p-2 rounded-xl border border-emerald-900/40">
+                          <span className="font-bold block">Resolution Note:</span>
+                          <p>{c.staffNotes}</p>
+                        </div>
+                      )}
+
+                      {c.status !== 'RESOLVED' && (
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              const note = window.prompt('Resolution note for customer (e.g. Dish remade and sent to table):')
+                              if (note === null) return
+                              await fetch(`/api/admin/complaints/${c.id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ status: 'RESOLVED', staffNotes: note || 'Resolved by staff' }),
+                              })
+                              fetchOrders()
+                              setSelectedOrder(null)
+                            }}
+                            className="px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                          >
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>Mark Resolved</span>
+                          </button>
+
+                          {selectedOrder.paymentStatus !== 'REFUNDED' && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                const confirmRefund = window.confirm(
+                                  `Process refund for Order #${selectedOrder.id.slice(-6).toUpperCase()} ($${Number(selectedOrder.totalPrice).toFixed(2)}) and resolve this issue?`
+                                )
+                                if (!confirmRefund) return
+                                await fetch(`/api/admin/orders/${selectedOrder.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ paymentStatus: 'REFUNDED' }),
+                                })
+                                await fetch(`/api/admin/complaints/${c.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({
+                                    status: 'RESOLVED',
+                                    staffNotes: 'Dish returned. Payment refunded to customer.',
+                                  }),
+                                })
+                                fetchOrders()
+                                setSelectedOrder(null)
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white font-bold text-[11px] flex items-center gap-1 cursor-pointer transition-colors shadow-sm"
+                            >
+                              <span>💰 Refund &amp; Resolve</span>
+                            </button>
+                          )}
+
+                          {c.status === 'PENDING' && (
+                            <button
+                              type="button"
+                              onClick={async () => {
+                                await fetch(`/api/admin/complaints/${c.id}`, {
+                                  method: 'PATCH',
+                                  headers: { 'Content-Type': 'application/json' },
+                                  body: JSON.stringify({ status: 'REVIEWING' }),
+                                })
+                                fetchOrders()
+                                setSelectedOrder(null)
+                              }}
+                              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] cursor-pointer transition-colors"
+                            >
+                              <span>Mark Reviewing</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  ))}
                 </div>
               )}
 

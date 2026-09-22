@@ -20,6 +20,7 @@ import {
   Phone,
   User,
   Send,
+  AlertTriangle,
 } from 'lucide-react'
 
 export type WaiterOrderItem = {
@@ -37,6 +38,17 @@ export type WaiterOrderItem = {
       emoji?: string | null
     } | null
   }
+}
+
+export type WaiterComplaint = {
+  id: string
+  category: string
+  items?: string | null
+  details: string
+  desiredAction?: string | null
+  status: string
+  staffNotes?: string | null
+  createdAt: string
 }
 
 export type WaiterOrder = {
@@ -58,6 +70,7 @@ export type WaiterOrder = {
     id: string
     number: number
   } | null
+  complaints?: WaiterComplaint[]
   items: WaiterOrderItem[]
 }
 
@@ -271,6 +284,12 @@ export default function WaiterDisplayClient({
   ).length
   const countServed = orders.filter((o) => o.status === 'SERVED').length
 
+  const pendingComplaints = orders.flatMap((o) =>
+    (o.complaints || [])
+      .filter((c) => c.status !== 'RESOLVED')
+      .map((c) => ({ complaint: c, order: o }))
+  )
+
   return (
     <div className="space-y-6">
       {/* Toast Notification */}
@@ -278,6 +297,94 @@ export default function WaiterDisplayClient({
         <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-top duration-300 bg-blue-500 text-white font-bold px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 border border-blue-400">
           <Sparkles className="w-5 h-5" />
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Urgent Floor Return / Complaint Banner */}
+      {pendingComplaints.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-rose-950/80 border-2 border-rose-600 shadow-xl shadow-rose-950/50 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-rose-300 font-black text-sm uppercase tracking-wider">
+              <AlertTriangle className="w-5 h-5 text-rose-400 shrink-0 animate-bounce" />
+              <span>
+                Floor Alert: {pendingComplaints.length} Customer Return / Quality Issue{pendingComplaints.length > 1 ? 's' : ''}!
+              </span>
+            </div>
+            <span className="text-xs bg-rose-600 text-white font-black px-3 py-1 rounded-full uppercase tracking-wider">
+              Immediate Attention
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+            {pendingComplaints.map(({ complaint, order }) => (
+              <div
+                key={complaint.id}
+                className="p-3.5 rounded-2xl bg-zinc-900 border border-rose-500/40 text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+              >
+                <div>
+                  <span className="font-black text-white text-sm block">
+                    {order.table ? `Table #${order.table.number}` : order.deliveryAddress || 'Delivery'}:{' '}
+                    <span className="text-rose-400">
+                      {complaint.category === 'DISLIKE_FOOD'
+                        ? "Don't Like Food / Taste"
+                        : complaint.category === 'RETURN_DISH'
+                        ? 'Return Dish Requested'
+                        : complaint.category.replace(/_/g, ' ')}
+                    </span>
+                  </span>
+                  <p className="text-zinc-300 text-[11px] italic mt-0.5">
+                    &quot;{complaint.details}&quot;
+                  </p>
+                  <div className="text-[11px] text-amber-400 font-semibold mt-1">
+                    Action: {complaint.desiredAction?.replace(/_/g, ' ')}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0">
+                  {complaint.status === 'PENDING' && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await fetch(`/api/admin/complaints/${complaint.id}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            status: 'REVIEWING',
+                            staffNotes: 'Waiter attending table now',
+                          }),
+                        })
+                        fetchOrders(false)
+                      }}
+                      className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer transition-colors"
+                    >
+                      Heading to Table
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const note = window.prompt(
+                        'Resolution note (e.g. Dish collected from table and replacement delivered):'
+                      )
+                      if (note === null) return
+                      await fetch(`/api/admin/complaints/${complaint.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          status: 'RESOLVED',
+                          staffNotes: note || 'Resolved at table by waiter',
+                        }),
+                      })
+                      fetchOrders(false)
+                    }}
+                    className="px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition-colors"
+                  >
+                    Mark Resolved
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -679,6 +786,103 @@ export default function WaiterDisplayClient({
                     </div>
                   )}
                 </div>
+
+                {/* Customer Complaints & Food Return Requests */}
+                {order.complaints && order.complaints.length > 0 && (
+                  <div className="p-3.5 mx-4 mt-3 rounded-2xl bg-rose-950/70 border-2 border-rose-500/80 space-y-2 text-xs">
+                    <div className="flex items-center justify-between">
+                      <span className="font-extrabold text-rose-300 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                        <AlertTriangle className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                        <span>
+                          {order.complaints[0].desiredAction?.startsWith('RETURN') ||
+                          order.complaints[0].category === 'RETURN_DISH'
+                            ? '🚨 Food Return Request'
+                            : '⚠️ Food Issue Reported'}
+                        </span>
+                      </span>
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          order.complaints[0].status === 'RESOLVED'
+                            ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30'
+                            : order.complaints[0].status === 'REVIEWING'
+                            ? 'bg-blue-500/20 text-blue-300 border border-blue-500/30 animate-pulse'
+                            : 'bg-rose-500/30 text-rose-200 border border-rose-500/40'
+                        }`}
+                      >
+                        {order.complaints[0].status}
+                      </span>
+                    </div>
+
+                    <div className="text-zinc-200">
+                      <span className="font-bold text-rose-300 block">
+                        {order.complaints[0].category === 'DISLIKE_FOOD'
+                          ? "Don't Like Food / Taste"
+                          : order.complaints[0].category === 'RETURN_DISH'
+                          ? 'Return Dish Requested'
+                          : order.complaints[0].category.replace(/_/g, ' ')}
+                        {order.complaints[0].items ? ` — Dish: ${order.complaints[0].items}` : ''}
+                      </span>
+                      <p className="text-[11px] text-zinc-300 italic bg-zinc-950/80 p-2 rounded-xl mt-1 border border-zinc-800">
+                        &quot;{order.complaints[0].details}&quot;
+                      </p>
+                    </div>
+
+                    <div className="text-[11px] text-amber-300">
+                      Requested: <strong>{order.complaints[0].desiredAction?.replace(/_/g, ' ')}</strong>
+                    </div>
+
+                    {order.complaints[0].staffNotes && (
+                      <div className="text-[10px] text-emerald-300 bg-emerald-950/40 p-1.5 rounded-lg border border-emerald-900/50">
+                        Resolution: {order.complaints[0].staffNotes}
+                      </div>
+                    )}
+
+                    {order.complaints[0].status !== 'RESOLVED' && (
+                      <div className="flex items-center gap-2 pt-1">
+                        {order.complaints[0].status === 'PENDING' && (
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              await fetch(`/api/admin/complaints/${order.complaints![0].id}`, {
+                                method: 'PATCH',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                  status: 'REVIEWING',
+                                  staffNotes: 'Waiter dispatched to table',
+                                }),
+                              })
+                              fetchOrders(false)
+                            }}
+                            className="flex-1 py-1.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-[11px] cursor-pointer transition-colors"
+                          >
+                            Attend Table
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const note = window.prompt(
+                              'Resolution note (e.g. Dish collected from table and replaced/refunded):'
+                            )
+                            if (note === null) return
+                            await fetch(`/api/admin/complaints/${order.complaints![0].id}`, {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                status: 'RESOLVED',
+                                staffNotes: note || 'Resolved by waiter',
+                              }),
+                            })
+                            fetchOrders(false)
+                          }}
+                          className="flex-1 py-1.5 px-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] cursor-pointer transition-colors"
+                        >
+                          Mark Resolved
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Items to deliver */}
                 <div className="p-4 sm:p-5 flex-1 space-y-3">

@@ -78,6 +78,9 @@ export async function GET(request: NextRequest) {
             number: true,
           },
         },
+        complaints: {
+          orderBy: { createdAt: 'desc' },
+        },
         items: {
           include: {
             product: {
@@ -109,6 +112,16 @@ export async function GET(request: NextRequest) {
       paymentScreenshot: o.paymentScreenshot,
       totalPrice: Number(o.totalPrice),
       notes: o.notes,
+      complaints: (o.complaints || []).map((c) => ({
+        id: c.id,
+        category: c.category,
+        items: c.items,
+        details: c.details,
+        desiredAction: c.desiredAction,
+        status: c.status,
+        staffNotes: c.staffNotes,
+        createdAt: c.createdAt.toISOString(),
+      })),
       createdAt: o.createdAt.toISOString(),
       table: o.table
         ? {

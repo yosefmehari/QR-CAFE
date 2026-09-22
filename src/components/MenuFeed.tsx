@@ -260,7 +260,11 @@ export default function MenuFeed({ categories, allProducts }: MenuFeedProps) {
       <footer className="border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 py-8 text-center text-xs text-zinc-500 dark:text-zinc-400">
         <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-3">
           <p>© {new Date().getFullYear()} QR Cafe & Bistro. Built with Next.js & PostgreSQL.</p>
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4 flex-wrap justify-center">
+            <Link href="/complaint" className="text-rose-600 dark:text-rose-400 font-bold hover:underline">
+              Return Food / Complain
+            </Link>
+            <span>•</span>
             <Link href="/tables" className="text-amber-600 font-medium hover:underline">
               View Table QR Directory
             </Link>

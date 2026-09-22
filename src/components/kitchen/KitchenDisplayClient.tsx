@@ -14,6 +14,7 @@ import {
   Check,
   XCircle,
   History,
+  AlertTriangle,
 } from 'lucide-react'
 
 export type KitchenOrderItem = {
@@ -26,6 +27,17 @@ export type KitchenOrderItem = {
     name: string
     imageUrl?: string | null
   }
+}
+
+export type KitchenComplaint = {
+  id: string
+  category: string
+  items?: string | null
+  details: string
+  desiredAction?: string | null
+  status: string
+  staffNotes?: string | null
+  createdAt: string
 }
 
 export type KitchenOrder = {
@@ -47,6 +59,7 @@ export type KitchenOrder = {
     id: string
     number: number
   } | null
+  complaints?: KitchenComplaint[]
   items: KitchenOrderItem[]
 }
 
@@ -464,6 +477,31 @@ export default function KitchenDisplayClient({ initialOrders }: KitchenDisplayCl
                       <AlertCircle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
                       <div>
                         <span className="font-bold">Customer Note:</span> {order.notes}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Food Quality / Remake Alert Banner */}
+                  {order.complaints && order.complaints.length > 0 && (
+                    <div className="bg-rose-950/60 border-y border-rose-600/60 px-4 py-2.5 space-y-1 text-xs text-rose-200">
+                      <div className="flex items-center justify-between">
+                        <span className="font-extrabold text-rose-400 flex items-center gap-1.5 uppercase text-[10px] tracking-wider">
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-400 animate-pulse" />
+                          <span>
+                            {order.complaints[0].desiredAction === 'REMAKE'
+                              ? '🔥 URGENT REMAKE REQUESTED'
+                              : '⚠️ CUSTOMER FOOD ISSUE'}
+                          </span>
+                        </span>
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300">
+                          {order.complaints[0].status}
+                        </span>
+                      </div>
+                      <div className="text-[11px]">
+                        <strong className="text-white block">
+                          {order.complaints[0].items ? `Item: ${order.complaints[0].items}` : order.complaints[0].category.replace(/_/g, ' ')}
+                        </strong>
+                        <p className="italic text-zinc-300">&quot;{order.complaints[0].details}&quot;</p>
                       </div>
                     </div>
                   )}

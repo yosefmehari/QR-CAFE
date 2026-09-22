@@ -38,6 +38,9 @@ export async function GET(request: NextRequest) {
             number: true,
           },
         },
+        complaints: {
+          orderBy: { createdAt: 'desc' },
+        },
         items: {
           include: {
             product: {

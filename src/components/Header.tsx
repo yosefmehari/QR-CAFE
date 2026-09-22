@@ -1,8 +1,10 @@
 'use client'
 
+import { useState } from 'react'
 import Link from 'next/link'
-import { UtensilsCrossed, Search, Coffee, ShoppingBag, X } from 'lucide-react'
+import { UtensilsCrossed, Search, Coffee, ShoppingBag, X, RotateCcw } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
+import OrderHelpModal from './OrderHelpModal'
 
 interface HeaderProps {
   searchQuery: string
@@ -12,6 +14,7 @@ interface HeaderProps {
 
 export default function Header({ searchQuery, onSearchChange, tableNumber }: HeaderProps) {
   const { totalCount, openCart } = useCart()
+  const [isHelpModalOpen, setIsHelpModalOpen] = useState(false)
   return (
     <header className="sticky top-0 z-30 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 transition-colors">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -76,6 +79,18 @@ export default function Header({ searchQuery, onSearchChange, tableNumber }: Hea
               </div>
             )}
 
+            {/* Returns & Order Help Button */}
+            <button
+              type="button"
+              onClick={() => setIsHelpModalOpen(true)}
+              className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 dark:hover:bg-rose-900/50 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 transition-all cursor-pointer flex items-center gap-1.5 text-xs font-bold shadow-xs"
+              title="Return food, report quality issue, or request refund"
+              aria-label="Return food or report issue"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-rose-500" />
+              <span className="hidden sm:inline">Returns &amp; Help</span>
+            </button>
+
             {/* Shopping Cart Header Button */}
             <button
               type="button"
@@ -122,6 +137,12 @@ export default function Header({ searchQuery, onSearchChange, tableNumber }: Hea
           </div>
         </div>
       </div>
+
+      {/* Food Returns & Help Modal */}
+      <OrderHelpModal
+        isOpen={isHelpModalOpen}
+        onClose={() => setIsHelpModalOpen(false)}
+      />
     </header>
   )
 }
