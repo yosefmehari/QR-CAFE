@@ -197,9 +197,10 @@ export async function POST(request: NextRequest) {
       paymentStatus = 'PENDING'
       const ref = bankTransferDetails?.transactionReference?.trim()
       const bank = bankTransferDetails?.bankUsed?.trim() || 'Bank Transfer'
-      if (ref && screenshot) {
+      const hasRealRef = Boolean(ref && ref !== 'Receipt Screenshot Attached' && !ref.startsWith('[') && ref.length >= 2)
+      if (hasRealRef && screenshot) {
         paymentReference = `${bank}: TXN #${ref} (Screenshot Attached)`
-      } else if (ref) {
+      } else if (hasRealRef) {
         paymentReference = `${bank}: TXN #${ref}`
       } else {
         paymentReference = `${bank}: [Receipt Screenshot Attached]`

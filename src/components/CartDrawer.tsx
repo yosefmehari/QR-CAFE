@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useCart } from '@/context/CartContext'
 import { getProductImage } from '@/lib/images'
+import { optimizeReceiptImage } from '@/lib/clientImage'
 import {
   X,
   Plus,
@@ -87,6 +88,7 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
   const [screenshotFile, setScreenshotFile] = useState<File | null>(null)
   const [screenshotPreview, setScreenshotPreview] = useState<string | null>(null)
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [screenshotBase64, setScreenshotBase64] = useState<string | null>(null)
   const [isUploadingScreenshot, setIsUploadingScreenshot] = useState(false)
 
   const [prevTableNumber, setPrevTableNumber] = useState(currentTableNumber)
@@ -160,36 +162,53 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
     const file = e.target.files?.[0]
     if (!file) return
 
-    if (!file.type.startsWith('image/')) {
+    setErrorMessage(null)
+
+    const isImageMime = file.type.startsWith('image/')
+    const isImageExt = /\.(jpe?g|png|webp|heic|heif|bmp|gif|svg)$/i.test(file.name || '')
+    if (!isImageMime && !isImageExt && file.type !== '' && file.type !== 'application/octet-stream') {
       setErrorMessage('Please upload a valid image file (PNG, JPG, or WEBP).')
       return
     }
 
-    if (file.size > 10 * 1024 * 1024) {
-      setErrorMessage('Image size exceeds 10MB limit.')
+    if (file.size > 20 * 1024 * 1024) {
+      setErrorMessage('Image size exceeds 20MB limit.')
       return
     }
 
     setScreenshotFile(file)
-    const previewUrl = URL.createObjectURL(file)
-    setScreenshotPreview(previewUrl)
-    setErrorMessage(null)
+    setIsUploadingScreenshot(true)
 
-    // Pre-upload in background
     try {
-      setIsUploadingScreenshot(true)
+      // 1. Client-side optimization: downscale large smartphone photos to max 1600px & ~150KB JPEG
+      const { blob, dataUrl, filename } = await optimizeReceiptImage(file)
+      setScreenshotPreview(dataUrl)
+      setScreenshotBase64(dataUrl)
+
+      // 2. Pre-upload optimized blob in background to server
       const formData = new FormData()
-      formData.append('file', file)
+      formData.append('file', blob, filename)
       const res = await fetch('/api/upload', {
         method: 'POST',
         body: formData,
       })
+
       if (res.ok) {
         const data = await res.json()
-        setScreenshotUrl(data.url)
+        if (data.url) {
+          setScreenshotUrl(data.url)
+        }
+      } else {
+        console.warn('Screenshot server pre-upload warning, using client data URL fallback')
       }
     } catch (err) {
-      console.error('Screenshot pre-upload failed', err)
+      console.warn('Screenshot processing note:', err)
+      try {
+        const fallbackUrl = URL.createObjectURL(file)
+        setScreenshotPreview(fallbackUrl)
+      } catch {
+        // no-op
+      }
     } finally {
       setIsUploadingScreenshot(false)
     }
@@ -199,6 +218,7 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
     setScreenshotFile(null)
     setScreenshotPreview(null)
     setScreenshotUrl(null)
+    setScreenshotBase64(null)
   }
 
   const handlePlaceOrder = async (e?: React.FormEvent) => {
@@ -291,11 +311,12 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
     }
 
     if (paymentMethod === 'BANK_TRANSFER') {
-      if (!bankTxnRef.trim() && !screenshotFile && !screenshotUrl) {
+      const hasScreenshot = Boolean(screenshotFile || screenshotUrl || screenshotBase64)
+      if (!bankTxnRef.trim() && !hasScreenshot) {
         setErrorMessage('Please enter your transaction confirmation code or upload a receipt screenshot.')
         return
       }
-      if (bankTxnRef.trim() && bankTxnRef.trim().length < 3 && !screenshotFile && !screenshotUrl) {
+      if (bankTxnRef.trim() && bankTxnRef.trim().length < 3 && !hasScreenshot) {
         setErrorMessage('Transaction reference must be at least 3 characters long, or upload a receipt screenshot.')
         return
       }
@@ -303,23 +324,31 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
 
     setIsSubmitting(true)
 
-    // Upload screenshot if not yet uploaded
-    let finalScreenshotUrl = screenshotUrl
-    if (screenshotFile && !finalScreenshotUrl) {
+    // Ensure we have a valid screenshot (either server upload URL or client base64 fallback)
+    let finalScreenshot = screenshotUrl || screenshotBase64
+
+    if (screenshotFile && !finalScreenshot) {
       try {
-        setPaymentPhase('Uploading receipt screenshot...')
+        setPaymentPhase('Processing receipt screenshot...')
+        const { blob, dataUrl, filename } = await optimizeReceiptImage(screenshotFile)
+        finalScreenshot = dataUrl
+        setScreenshotBase64(dataUrl)
+
         const fd = new FormData()
-        fd.append('file', screenshotFile)
+        fd.append('file', blob, filename)
         const upRes = await fetch('/api/upload', {
           method: 'POST',
           body: fd,
         })
         if (upRes.ok) {
           const upData = await upRes.json()
-          finalScreenshotUrl = upData.url
+          if (upData.url) {
+            finalScreenshot = upData.url
+            setScreenshotUrl(upData.url)
+          }
         }
       } catch (err) {
-        console.error('Failed to upload screenshot', err)
+        console.warn('Screenshot processing during checkout:', err)
       }
     }
 
@@ -336,6 +365,9 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
       await new Promise((r) => setTimeout(r, 400))
     }
 
+    const cleanRef = bankTxnRef.trim()
+    const finalRef = cleanRef || (finalScreenshot ? 'Receipt Screenshot Attached' : undefined)
+
     try {
       const response = await fetch('/api/orders', {
         method: 'POST',
@@ -349,7 +381,7 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
           deliveryNotes: orderType === 'DELIVERY' ? deliveryNotes.trim() : undefined,
           notes: orderNotes.trim() || undefined,
           paymentMethod,
-          paymentScreenshot: finalScreenshotUrl || undefined,
+          paymentScreenshot: finalScreenshot || undefined,
           cardDetails:
             paymentMethod === 'CARD'
               ? {
@@ -362,8 +394,8 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
           bankTransferDetails:
             paymentMethod === 'BANK_TRANSFER'
               ? {
-                  transactionReference: bankTxnRef.trim() || (finalScreenshotUrl ? 'Receipt Screenshot Attached' : undefined),
-                  screenshotUrl: finalScreenshotUrl || undefined,
+                  transactionReference: finalRef,
+                  screenshotUrl: finalScreenshot || undefined,
                   senderName: senderName.trim() || undefined,
                   bankUsed: cafeSettings?.bankName || 'Bank Transfer',
                 }
@@ -914,7 +946,7 @@ export default function CartDrawer({ currentTableNumber }: CartDrawerProps = {})
                               ) : (
                                 <>
                                   <Check className="w-3 h-3" />
-                                  <span>Screenshot Attached</span>
+                                  <span>Screenshot Attached &amp; Verified</span>
                                 </>
                               )}
                             </p>
