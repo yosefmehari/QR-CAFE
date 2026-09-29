@@ -192,6 +192,24 @@ export default function OrderComplaintModal({
         throw new Error(data.error || 'Failed to submit complaint')
       }
 
+      // If customer requested waiter to table, automatically notify waiters
+      if (desiredAction === 'CALL_STAFF' && order.tableNumber) {
+        try {
+          await fetch('/api/waiter/calls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tableNumber: order.tableNumber,
+              orderId: order.id,
+              reason: 'COMPLAINT',
+              notes: `Customer requested waiter to table: ${details.trim()}`,
+            }),
+          })
+        } catch {
+          // ignore background failure
+        }
+      }
+
       setIsSuccess(true)
       onComplaintSubmitted()
     } catch (err: unknown) {

@@ -23,8 +23,10 @@ import {
   ShieldCheck,
   Phone,
   MessageSquare,
+  Bell,
 } from 'lucide-react'
 import type { TrackedOrder, TrackedItem, TrackedComplaint } from './OrderTrackerClient'
+import CallWaiterModal from './CallWaiterModal'
 
 const ISSUE_CATEGORIES = [
   {
@@ -158,6 +160,7 @@ export default function ComplaintPageClient() {
   const [submitSuccess, setSubmitSuccess] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [waiterCalledMessage, setWaiterCalledMessage] = useState<string | null>(null)
+  const [isCallWaiterOpen, setIsCallWaiterOpen] = useState(false)
 
   // Load order helper
   const loadOrder = useCallback(async (identifier: string) => {
@@ -286,6 +289,25 @@ export default function ComplaintPageClient() {
       }
 
       setSubmitSuccess(true)
+
+      // If user selected CALL_STAFF or wants a waiter sent to table, dispatch waiter alert
+      if (desiredAction === 'CALL_STAFF' && order.tableNumber) {
+        try {
+          await fetch('/api/waiter/calls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tableNumber: order.tableNumber,
+              orderId: order.id,
+              reason: 'COMPLAINT',
+              notes: `Customer return/issue: ${details.trim()}`,
+            }),
+          })
+        } catch (e) {
+          console.error('Failed to notify waiter automatically:', e)
+        }
+      }
+
       // Refresh order data
       const refreshedRes = await fetch(`/api/orders/${order.id}`)
       if (refreshedRes.ok) {
@@ -300,9 +322,30 @@ export default function ComplaintPageClient() {
     }
   }
 
-  const handleCallWaiter = () => {
-    setWaiterCalledMessage('A floor waiter has been notified and is heading to your table immediately!')
-    setTimeout(() => setWaiterCalledMessage(null), 6000)
+  const handleCallWaiter = async () => {
+    const table = order?.tableNumber || (recentTableNumber ? parseInt(recentTableNumber, 10) : null)
+    if (table) {
+      try {
+        await fetch('/api/waiter/calls', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tableNumber: table,
+            reason: 'COMPLAINT',
+            notes: order
+              ? `Urgent guest assistance requested at Table #${table} for Order #${order.id.slice(-6).toUpperCase()}`
+              : `Guest called waiter to Table #${table} from Return & Complaint desk`,
+            orderId: order?.id,
+          }),
+        })
+        setWaiterCalledMessage(`A floor waiter has been notified and dispatched to Table #${table}!`)
+      } catch {
+        setWaiterCalledMessage(`Floor waitstaff notified for Table #${table}.`)
+      }
+      setTimeout(() => setWaiterCalledMessage(null), 6000)
+    } else {
+      setIsCallWaiterOpen(true)
+    }
   }
 
   const isReturnAction =
@@ -852,6 +895,14 @@ export default function ComplaintPageClient() {
           </div>
         )}
       </div>
+
+      <CallWaiterModal
+        isOpen={isCallWaiterOpen}
+        onClose={() => setIsCallWaiterOpen(false)}
+        tableNumber={order?.tableNumber || (recentTableNumber ? parseInt(recentTableNumber, 10) : null)}
+        orderId={order?.id}
+        initialReason="COMPLAINT"
+      />
     </div>
   )
 }

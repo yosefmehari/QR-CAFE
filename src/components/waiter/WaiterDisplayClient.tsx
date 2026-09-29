@@ -21,6 +21,11 @@ import {
   User,
   Send,
   AlertTriangle,
+  PhoneCall,
+  Droplets,
+  CreditCard,
+  Sparkle,
+  Trash2,
 } from 'lucide-react'
 
 export type WaiterOrderItem = {
@@ -80,17 +85,39 @@ export type CafeTable = {
   isActive: boolean
 }
 
+export type WaiterCallItem = {
+  id: string
+  tableNumber: number
+  reason: string
+  notes?: string | null
+  status: 'PENDING' | 'ACKNOWLEDGED' | 'RESOLVED' | 'CANCELLED'
+  resolvedBy?: string | null
+  createdAt: string
+  order?: {
+    id: string
+    status: string
+    totalPrice?: number | string
+  } | null
+  table?: {
+    id: string
+    number: number
+  } | null
+}
+
 interface WaiterDisplayClientProps {
   initialOrders: WaiterOrder[]
+  initialCalls?: WaiterCallItem[]
   tables: CafeTable[]
 }
 
 export default function WaiterDisplayClient({
   initialOrders,
+  initialCalls,
   tables,
 }: WaiterDisplayClientProps) {
   const [orders, setOrders] = useState<WaiterOrder[]>(initialOrders)
-  const [activeTab, setActiveTab] = useState<'ready' | 'delivery' | 'preparing' | 'all' | 'history'>('ready')
+  const [waiterCalls, setWaiterCalls] = useState<WaiterCallItem[]>(initialCalls || [])
+  const [activeTab, setActiveTab] = useState<'ready' | 'delivery' | 'preparing' | 'calls' | 'all' | 'history'>('ready')
   const [selectedTableNumber, setSelectedTableNumber] = useState<number | null>(null)
   const [soundEnabled, setSoundEnabled] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -102,6 +129,11 @@ export default function WaiterDisplayClient({
   // Keep track of orders that were READY previously to chime when a new one is READY
   const previousReadyIdsRef = useRef<Set<string>>(
     new Set(initialOrders.filter((o) => o.status === 'READY').map((o) => o.id))
+  )
+
+  // Keep track of calls that were PENDING previously to chime when a new one is PENDING
+  const previousCallIdsRef = useRef<Set<string>>(
+    new Set((initialCalls || []).filter((c) => c.status === 'PENDING').map((c) => c.id))
   )
 
   // Service bell synthesized chime for orders READY for table delivery
@@ -135,47 +167,115 @@ export default function WaiterDisplayClient({
     }
   }, [soundEnabled])
 
+  // Distinct attention-grabbing chime specifically when a guest calls the waiter to a table
+  const playTableCallChime = useCallback(() => {
+    if (!soundEnabled || typeof window === 'undefined') return
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext
+      const ctx = new AudioCtx()
+      const now = ctx.currentTime
+
+      const playPing = (freq: number, start: number, dur: number) => {
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = 'triangle'
+        osc.frequency.setValueAtTime(freq, start)
+        gain.gain.setValueAtTime(0.5, start)
+        gain.gain.exponentialRampToValueAtTime(0.001, start + dur)
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start(start)
+        osc.stop(start + dur)
+      }
+
+      // 3 clear repeating high rings: C6 -> E6 -> G6 (urgent floor summons)
+      playPing(1046.5, now, 0.35)
+      playPing(1318.5, now + 0.16, 0.35)
+      playPing(1760.0, now + 0.32, 0.55)
+    } catch {
+      // Audio context may be restricted before interaction
+    }
+  }, [soundEnabled])
+
   const showToast = useCallback((msg: string) => {
     setToastMessage(msg)
     setTimeout(() => setToastMessage(null), 3500)
   }, [])
 
-  // Poll orders
+  // Poll orders and waiter calls
   const fetchOrders = useCallback(
     async (silent = false) => {
       if (!silent) setIsRefreshing(true)
       try {
         const isHistoryTab = activeTab === 'history'
-        const res = await fetch(`/api/kitchen/orders?view=${isHistoryTab ? 'history' : 'active'}`)
-        if (!res.ok) return
-        const data = await res.json()
-        const fetched: WaiterOrder[] = data.orders || []
+        const [ordersRes, callsRes] = await Promise.all([
+          fetch(`/api/kitchen/orders?view=${isHistoryTab ? 'history' : 'active'}`),
+          fetch(`/api/waiter/calls?view=${isHistoryTab ? 'all' : 'active'}`),
+        ])
 
-        if (!isHistoryTab) {
-          const newlyReady = fetched.filter(
-            (o) => o.status === 'READY' && !previousReadyIdsRef.current.has(o.id)
-          )
-          if (newlyReady.length > 0) {
-            playServiceBell()
-            const destination = newlyReady[0].table
-              ? `Table #${newlyReady[0].table.number}`
-              : `Delivery to ${newlyReady[0].deliveryAddress || 'Address'}`
-            showToast(`🔔 ${destination} order is READY for delivery!`)
+        if (ordersRes.ok) {
+          const data = await ordersRes.json()
+          const fetched: WaiterOrder[] = data.orders || []
+
+          if (!isHistoryTab) {
+            const newlyReady = fetched.filter(
+              (o) => o.status === 'READY' && !previousReadyIdsRef.current.has(o.id)
+            )
+            if (newlyReady.length > 0) {
+              playServiceBell()
+              const destination = newlyReady[0].table
+                ? `Table #${newlyReady[0].table.number}`
+                : `Delivery to ${newlyReady[0].deliveryAddress || 'Address'}`
+              showToast(`🔔 ${destination} order is READY for delivery!`)
+            }
           }
+
+          previousReadyIdsRef.current = new Set(
+            fetched.filter((o) => o.status === 'READY').map((o) => o.id)
+          )
+          setOrders(fetched)
         }
 
-        previousReadyIdsRef.current = new Set(
-          fetched.filter((o) => o.status === 'READY').map((o) => o.id)
-        )
-        setOrders(fetched)
+        if (callsRes.ok) {
+          const callsData = await callsRes.json()
+          const fetchedCalls: WaiterCallItem[] = callsData.calls || []
+
+          const newlyPendingCalls = fetchedCalls.filter(
+            (c) => c.status === 'PENDING' && !previousCallIdsRef.current.has(c.id)
+          )
+
+          if (newlyPendingCalls.length > 0) {
+            playTableCallChime()
+            if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
+              navigator.vibrate([300, 150, 300, 150, 400])
+            }
+            const firstCall = newlyPendingCalls[0]
+            showToast(`🚨 TABLE #${firstCall.tableNumber} IS CALLING! (${firstCall.reason.replace(/_/g, ' ')})`)
+
+            if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification(`🚨 Table #${firstCall.tableNumber} Calling Waiter!`, {
+                body: `Reason: ${firstCall.reason.replace(/_/g, ' ')}${firstCall.notes ? ` - ${firstCall.notes}` : ''}`,
+                icon: '/favicon.ico',
+              })
+            }
+          }
+
+          previousCallIdsRef.current = new Set(
+            fetchedCalls.filter((c) => c.status === 'PENDING').map((c) => c.id)
+          )
+          setWaiterCalls(fetchedCalls)
+        }
+
         setLastUpdated(new Date())
       } catch (err) {
-        console.error('Failed to poll waiter orders:', err)
+        console.error('Failed to poll waiter orders/calls:', err)
       } finally {
         if (!silent) setIsRefreshing(false)
       }
     },
-    [activeTab, playServiceBell, showToast]
+    [activeTab, playServiceBell, playTableCallChime, showToast]
   )
 
   useEffect(() => {
@@ -218,8 +318,59 @@ export default function WaiterDisplayClient({
     }
   }
 
+  // Call status actions
+  const acknowledgeWaiterCall = async (callId: string) => {
+    try {
+      setWaiterCalls((prev) =>
+        prev.map((c) => (c.id === callId ? { ...c, status: 'ACKNOWLEDGED' } : c))
+      )
+      const res = await fetch(`/api/waiter/calls/${callId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'ACKNOWLEDGED' }),
+      })
+      if (!res.ok) throw new Error()
+      showToast('🏃 Attending table! Guest notified that waiter is on the way.')
+    } catch {
+      showToast('⚠️ Could not acknowledge call')
+      fetchOrders(true)
+    }
+  }
+
+  const resolveWaiterCall = async (callId: string) => {
+    try {
+      setWaiterCalls((prev) =>
+        prev.map((c) => (c.id === callId ? { ...c, status: 'RESOLVED' } : c))
+      )
+      const res = await fetch(`/api/waiter/calls/${callId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: 'RESOLVED' }),
+      })
+      if (!res.ok) throw new Error()
+      showToast('✅ Table call marked as resolved!')
+    } catch {
+      showToast('⚠️ Could not resolve call')
+      fetchOrders(true)
+    }
+  }
+
+  const formatTimeAgo = (dateStr: string) => {
+    const diffSec = Math.max(0, Math.floor((currentTime - new Date(dateStr).getTime()) / 1000))
+    if (diffSec < 60) return `${diffSec}s ago`
+    const diffMin = Math.floor(diffSec / 60)
+    if (diffMin < 60) return `${diffMin}m ago`
+    return `${Math.floor(diffMin / 60)}h ago`
+  }
+
+  const activeWaiterCalls = waiterCalls.filter(
+    (c) => c.status === 'PENDING' || c.status === 'ACKNOWLEDGED'
+  )
+
   // Table status calculation
   const getTableStatus = (tableNum: number) => {
+    const hasCall = activeWaiterCalls.some((c) => c.tableNumber === tableNum)
+    if (hasCall) return 'CALLING'
     const tableOrders = orders.filter((o) => o.table?.number === tableNum)
     const hasReady = tableOrders.some((o) => o.status === 'READY')
     if (hasReady) return 'READY'
@@ -297,6 +448,96 @@ export default function WaiterDisplayClient({
         <div className="fixed top-20 right-6 z-50 animate-in slide-in-from-top duration-300 bg-blue-500 text-white font-bold px-4 py-3 rounded-2xl shadow-xl flex items-center gap-2 border border-blue-400">
           <Sparkles className="w-5 h-5" />
           <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* Urgent Floor Table Calls Banner */}
+      {activeWaiterCalls.length > 0 && (
+        <div className="p-4 sm:p-5 rounded-3xl bg-gradient-to-r from-amber-950 via-zinc-900 to-amber-950 border-2 border-amber-500 shadow-xl shadow-amber-950/60 space-y-3 animate-in slide-in-from-top-2 duration-300">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2.5 text-amber-300 font-black text-sm uppercase tracking-wider">
+              <span className="relative flex h-3 w-3">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-3 w-3 bg-amber-500" />
+              </span>
+              <Bell className="w-5 h-5 text-amber-400 shrink-0 animate-bounce" />
+              <span>
+                Floor Alert: {activeWaiterCalls.length} Table{activeWaiterCalls.length > 1 ? 's' : ''} Calling Waiter!
+              </span>
+            </div>
+            <span className="text-xs bg-amber-500 text-zinc-950 font-black px-3 py-1 rounded-full uppercase tracking-wider">
+              Immediate Floor Response
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {activeWaiterCalls.map((call) => (
+              <div
+                key={call.id}
+                className={`p-4 rounded-2xl border text-xs flex flex-col justify-between gap-3 ${
+                  call.status === 'ACKNOWLEDGED'
+                    ? 'bg-blue-950/50 border-blue-500/50 text-blue-100'
+                    : 'bg-zinc-900 border-amber-500/60 text-zinc-100 shadow-lg shadow-amber-500/10'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-black text-zinc-950 bg-amber-400 px-2.5 py-0.5 rounded-xl shadow-sm">
+                        Table #{call.tableNumber}
+                      </span>
+                      <span className="font-extrabold text-amber-300 text-xs uppercase tracking-wide">
+                        {call.reason.replace(/_/g, ' ')}
+                      </span>
+                    </div>
+                    <span className="text-[11px] text-zinc-400 font-mono">
+                      {formatTimeAgo(call.createdAt)}
+                    </span>
+                  </div>
+
+                  {call.notes && (
+                    <p className="text-zinc-300 text-[11px] italic mt-2 bg-zinc-950/70 p-2.5 rounded-xl border border-zinc-800">
+                      &quot;{call.notes}&quot;
+                    </p>
+                  )}
+
+                  {call.order && (
+                    <div className="text-[10px] text-zinc-400 mt-2 flex items-center gap-2">
+                      <span>Order #{call.order.id.slice(-6).toUpperCase()}</span>
+                      <span className="text-emerald-400 font-semibold">• {call.order.status}</span>
+                    </div>
+                  )}
+
+                  {call.status === 'ACKNOWLEDGED' && (
+                    <div className="mt-2 text-[11px] font-bold text-blue-300 flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 animate-spin text-blue-400" />
+                      <span>{call.resolvedBy || 'Waiter'} attending now</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 border-t border-zinc-800">
+                  {call.status === 'PENDING' && (
+                    <button
+                      type="button"
+                      onClick={() => acknowledgeWaiterCall(call.id)}
+                      className="flex-1 py-2 px-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer transition-colors text-center"
+                    >
+                      🏃 Heading to Table
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => resolveWaiterCall(call.id)}
+                    className="flex-1 py-2 px-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition-colors text-center"
+                  >
+                    ✅ Mark Attended
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -514,6 +755,7 @@ export default function WaiterDisplayClient({
           {tables.map((tbl) => {
             const status = getTableStatus(tbl.number)
             const isSelected = selectedTableNumber === tbl.number
+            const isCalling = status === 'CALLING'
 
             return (
               <button
@@ -521,12 +763,14 @@ export default function WaiterDisplayClient({
                 onClick={() =>
                   setSelectedTableNumber(isSelected ? null : tbl.number)
                 }
-                className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer ${
+                className={`p-3 rounded-2xl border text-center transition-all flex flex-col items-center justify-center gap-1 cursor-pointer relative ${
                   isSelected
                     ? 'ring-2 ring-blue-400 scale-105'
                     : 'hover:scale-102'
                 } ${
-                  status === 'READY'
+                  isCalling
+                    ? 'bg-rose-950/80 border-rose-500 text-rose-200 ring-2 ring-rose-500/70 shadow-lg shadow-rose-500/40 animate-pulse'
+                    : status === 'READY'
                     ? 'bg-blue-950/60 border-blue-500 text-blue-300 shadow-lg shadow-blue-500/20 animate-pulse'
                     : status === 'PREPARING'
                     ? 'bg-amber-950/30 border-amber-500/50 text-amber-300'
@@ -543,7 +787,9 @@ export default function WaiterDisplayClient({
                 </span>
                 <span
                   className={`text-[9px] font-bold px-1.5 py-0.5 rounded-md uppercase tracking-wider ${
-                    status === 'READY'
+                    isCalling
+                      ? 'bg-rose-500 text-white animate-bounce'
+                      : status === 'READY'
                       ? 'bg-blue-500 text-white'
                       : status === 'PREPARING'
                       ? 'bg-amber-500/20 text-amber-300'
@@ -552,7 +798,7 @@ export default function WaiterDisplayClient({
                       : 'bg-emerald-500/20 text-emerald-400'
                   }`}
                 >
-                  {status === 'READY' ? 'DELIVER' : status === 'AVAILABLE' ? 'FREE' : status}
+                  {isCalling ? '🔔 CALLING' : status === 'READY' ? 'DELIVER' : status === 'AVAILABLE' ? 'FREE' : status}
                 </span>
               </button>
             )
@@ -564,6 +810,19 @@ export default function WaiterDisplayClient({
       <div className="bg-zinc-900/90 border border-zinc-800 rounded-3xl p-3 sm:p-4 flex flex-wrap items-center justify-between gap-3">
         {/* Navigation Tabs */}
         <div className="flex items-center gap-1.5 overflow-x-auto py-1 max-w-full">
+          <button
+            onClick={() => setActiveTab('calls')}
+            className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'calls'
+                ? 'bg-amber-500 text-zinc-950 shadow-md shadow-amber-500/25 ring-2 ring-amber-400'
+                : activeWaiterCalls.length > 0
+                ? 'bg-amber-950/80 text-amber-300 border border-amber-500/60 hover:bg-amber-900/60 animate-pulse'
+                : 'bg-zinc-800/80 text-zinc-400 hover:text-white hover:bg-zinc-800'
+            }`}
+          >
+            <Bell className={`w-3.5 h-3.5 ${activeWaiterCalls.length > 0 ? 'animate-bounce text-amber-400' : ''}`} />
+            <span>Table Calls ({activeWaiterCalls.length})</span>
+          </button>
           <button
             onClick={() => setActiveTab('ready')}
             className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all whitespace-nowrap cursor-pointer flex items-center gap-1.5 ${
@@ -646,8 +905,135 @@ export default function WaiterDisplayClient({
         </div>
       </div>
 
-      {/* Orders Grid */}
-      {filteredOrders.length === 0 ? (
+      {/* Table Calls Dedicated View vs Orders Grid */}
+      {activeTab === 'calls' ? (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h3 className="text-base font-bold text-white flex items-center gap-2">
+              <Bell className="w-5 h-5 text-amber-500 animate-bounce" />
+              <span>Table Calls &amp; Floor Assistance</span>
+            </h3>
+            <span className="text-xs text-zinc-400">
+              Showing active &amp; recent guest calls
+            </span>
+          </div>
+
+          {waiterCalls.length === 0 ? (
+            <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-3xl p-12 text-center space-y-4">
+              <div className="w-16 h-16 rounded-full bg-amber-500/10 text-amber-400 flex items-center justify-center mx-auto">
+                <CheckCircle2 className="w-8 h-8" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-lg font-bold text-white">No Table Calls Right Now</h3>
+                <p className="text-xs text-zinc-400 max-w-sm mx-auto">
+                  When a customer at any table presses the &quot;Call Waiter&quot; button, the floor bell will chime and their request will appear right here!
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6">
+              {waiterCalls
+                .filter((call) =>
+                  selectedTableNumber === null || call.tableNumber === selectedTableNumber
+                )
+                .map((call) => {
+                  const isPending = call.status === 'PENDING'
+                  const isAck = call.status === 'ACKNOWLEDGED'
+                  const isResolved = call.status === 'RESOLVED'
+
+                  return (
+                    <div
+                      key={call.id}
+                      className={`bg-zinc-900/90 rounded-3xl border flex flex-col justify-between transition-all duration-200 overflow-hidden shadow-xl p-5 gap-4 ${
+                        isPending
+                          ? 'border-amber-500/80 ring-2 ring-amber-500/30 shadow-amber-500/10'
+                          : isAck
+                          ? 'border-blue-500/60 ring-1 ring-blue-500/20'
+                          : 'border-zinc-800 opacity-70'
+                      }`}
+                    >
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className="text-lg font-black text-zinc-950 bg-amber-400 px-3 py-1 rounded-2xl shadow-sm">
+                              Table #{call.tableNumber}
+                            </span>
+                            <span className="text-xs font-black text-amber-300 uppercase tracking-wide">
+                              {call.reason.replace(/_/g, ' ')}
+                            </span>
+                          </div>
+
+                          <span
+                            className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                              isPending
+                                ? 'bg-amber-500 text-zinc-950 animate-pulse'
+                                : isAck
+                                ? 'bg-blue-500 text-white'
+                                : 'bg-emerald-500/20 text-emerald-400'
+                            }`}
+                          >
+                            {call.status}
+                          </span>
+                        </div>
+
+                        {call.notes && (
+                          <div className="bg-zinc-950/70 p-3 rounded-2xl border border-zinc-800 text-xs text-zinc-200 italic">
+                            &quot;{call.notes}&quot;
+                          </div>
+                        )}
+
+                        <div className="text-xs text-zinc-400 space-y-1">
+                          <div className="flex items-center justify-between text-[11px]">
+                            <span>Requested:</span>
+                            <span className="font-mono text-zinc-300">{formatTimeAgo(call.createdAt)}</span>
+                          </div>
+                          {call.order && (
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span>Linked Order:</span>
+                              <span className="text-amber-400 font-mono">#{call.order.id.slice(-6).toUpperCase()}</span>
+                            </div>
+                          )}
+                          {call.resolvedBy && (
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span>Attended by:</span>
+                              <span className="text-blue-400 font-semibold">{call.resolvedBy}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 pt-3 border-t border-zinc-800">
+                        {isPending && (
+                          <button
+                            type="button"
+                            onClick={() => acknowledgeWaiterCall(call.id)}
+                            className="flex-1 py-2.5 px-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs cursor-pointer transition-colors text-center"
+                          >
+                            🏃 Heading to Table
+                          </button>
+                        )}
+                        {!isResolved && (
+                          <button
+                            type="button"
+                            onClick={() => resolveWaiterCall(call.id)}
+                            className="flex-1 py-2.5 px-3 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs cursor-pointer transition-colors text-center"
+                          >
+                            ✅ Mark Attended
+                          </button>
+                        )}
+                        {isResolved && (
+                          <span className="w-full text-center text-xs text-emerald-400 font-bold py-1">
+                            ✓ Attended and Resolved
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          )}
+        </div>
+      ) : filteredOrders.length === 0 ? (
         <div className="bg-zinc-900/50 border border-zinc-800/80 rounded-3xl p-12 text-center space-y-4">
           <div className="w-16 h-16 rounded-full bg-blue-500/10 text-blue-400 flex items-center justify-center mx-auto">
             <CheckCircle2 className="w-8 h-8" />

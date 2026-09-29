@@ -2,9 +2,10 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
-import { UtensilsCrossed, Search, Coffee, ShoppingBag, X, RotateCcw } from 'lucide-react'
+import { UtensilsCrossed, Search, Coffee, ShoppingBag, X, RotateCcw, Bell } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
 import OrderHelpModal from './OrderHelpModal'
+import CallWaiterModal from './CallWaiterModal'
 
 interface HeaderProps {
   searchQuery: string
@@ -15,6 +16,7 @@ interface HeaderProps {
 export default function Header({ searchQuery, onSearchChange, tableNumber }: HeaderProps) {
   const { totalCount, openCart } = useCart()
   const [isHelpModalOpen, setIsHelpModalOpen] = useState(false)
+  const [isCallWaiterOpen, setIsCallWaiterOpen] = useState(false)
   return (
     <header className="sticky top-0 z-30 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 transition-colors">
       <div className="max-w-6xl mx-auto px-4 sm:px-6">
@@ -68,16 +70,33 @@ export default function Header({ searchQuery, onSearchChange, tableNumber }: Hea
           {/* Right Side Info & Staff Access */}
           <div className="flex items-center gap-2 sm:gap-3">
             {tableNumber ? (
-              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setIsCallWaiterOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800/60 text-amber-900 dark:text-amber-200 text-xs font-semibold cursor-pointer transition-colors"
+                title="Tap to call waiter to Table"
+              >
                 <UtensilsCrossed className="w-3.5 h-3.5 text-amber-600" />
                 <span>Table #{tableNumber}</span>
-              </div>
+              </button>
             ) : (
               <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-zinc-900 text-zinc-600 dark:text-zinc-400 text-xs font-medium">
                 <UtensilsCrossed className="w-3.5 h-3.5 text-zinc-400" />
                 <span>Dine-in Menu</span>
               </div>
             )}
+
+            {/* Call Waiter Button */}
+            <button
+              type="button"
+              onClick={() => setIsCallWaiterOpen(true)}
+              className="px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs transition-all cursor-pointer flex items-center gap-1.5 shadow-xs"
+              title="Call waiter to your table"
+              aria-label="Call waiter"
+            >
+              <Bell className="w-3.5 h-3.5 animate-bounce" />
+              <span className="hidden sm:inline">Call Waiter</span>
+            </button>
 
             {/* Returns & Order Help Button */}
             <button
@@ -142,6 +161,13 @@ export default function Header({ searchQuery, onSearchChange, tableNumber }: Hea
       <OrderHelpModal
         isOpen={isHelpModalOpen}
         onClose={() => setIsHelpModalOpen(false)}
+      />
+
+      {/* Call Waiter Modal */}
+      <CallWaiterModal
+        isOpen={isCallWaiterOpen}
+        onClose={() => setIsCallWaiterOpen(false)}
+        tableNumber={tableNumber}
       />
     </header>
   )

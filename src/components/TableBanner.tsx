@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { UtensilsCrossed, QrCode, X, Bike, MapPin } from 'lucide-react'
+import { UtensilsCrossed, QrCode, X, Bike, MapPin, Bell } from 'lucide-react'
 import { useCart } from '@/context/CartContext'
+import CallWaiterModal from './CallWaiterModal'
 
 interface TableBannerProps {
   tableNumber: number | null
@@ -13,6 +14,7 @@ interface TableBannerProps {
 export default function TableBanner({ tableNumber, onClearTable }: TableBannerProps) {
   const { openCart } = useCart()
   const [deliveryAddress, setDeliveryAddress] = useState<string | null>(null)
+  const [isCallWaiterOpen, setIsCallWaiterOpen] = useState(false)
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -23,41 +25,59 @@ export default function TableBanner({ tableNumber, onClearTable }: TableBannerPr
 
   if (tableNumber) {
     return (
-      <div className="bg-emerald-500 text-white py-2.5 px-4 shadow-sm transition-all animate-in slide-in-from-top-2 duration-200">
-        <div className="max-w-6xl mx-auto flex items-center justify-between text-xs sm:text-sm font-semibold gap-3">
-          <div className="flex items-center gap-2">
-            <span className="flex h-2 w-2 relative">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
-            </span>
-            <div className="flex items-center gap-1.5">
-              <UtensilsCrossed className="w-4 h-4" />
-              <span>Ordering for Table #{tableNumber}</span>
+      <>
+        <div className="bg-emerald-500 text-white py-2.5 px-4 shadow-sm transition-all animate-in slide-in-from-top-2 duration-200">
+          <div className="max-w-6xl mx-auto flex items-center justify-between text-xs sm:text-sm font-semibold gap-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-white" />
+              </span>
+              <div className="flex items-center gap-1.5">
+                <UtensilsCrossed className="w-4 h-4" />
+                <span>Ordering for Table #{tableNumber}</span>
+              </div>
+              <span className="hidden md:inline text-emerald-100 font-normal">
+                • Orders will be delivered straight to your table
+              </span>
             </div>
-            <span className="hidden md:inline text-emerald-100 font-normal">
-              • Orders will be delivered straight to your table
-            </span>
-          </div>
 
-          <div className="flex items-center gap-3">
-            <Link
-              href="/tables"
-              className="text-[11px] underline underline-offset-2 hover:text-emerald-100 font-medium"
-            >
-              Switch Table
-            </Link>
-            <button
-              type="button"
-              onClick={onClearTable}
-              className="inline-flex items-center gap-1 text-[11px] bg-emerald-600 hover:bg-emerald-700 px-2 py-0.5 rounded-full text-white cursor-pointer transition-colors"
-              title="Clear table selection"
-            >
-              <X className="w-3 h-3" />
-              <span>Leave Table</span>
-            </button>
+            <div className="flex items-center gap-2 sm:gap-3">
+              <button
+                type="button"
+                onClick={() => setIsCallWaiterOpen(true)}
+                className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-amber-500 hover:bg-amber-600 text-white px-2.5 py-1 rounded-full shadow-xs cursor-pointer transition-colors"
+                title="Call waiter to Table"
+              >
+                <Bell className="w-3.5 h-3.5 animate-bounce" />
+                <span>Call Waiter</span>
+              </button>
+
+              <Link
+                href="/tables"
+                className="text-[11px] underline underline-offset-2 hover:text-emerald-100 font-medium"
+              >
+                Switch Table
+              </Link>
+              <button
+                type="button"
+                onClick={onClearTable}
+                className="inline-flex items-center gap-1 text-[11px] bg-emerald-600 hover:bg-emerald-700 px-2 py-0.5 rounded-full text-white cursor-pointer transition-colors"
+                title="Clear table selection"
+              >
+                <X className="w-3 h-3" />
+                <span>Leave Table</span>
+              </button>
+            </div>
           </div>
         </div>
-      </div>
+
+        <CallWaiterModal
+          isOpen={isCallWaiterOpen}
+          onClose={() => setIsCallWaiterOpen(false)}
+          tableNumber={tableNumber}
+        />
+      </>
     )
   }
 

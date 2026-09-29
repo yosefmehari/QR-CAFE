@@ -59,13 +59,14 @@ model Product {
 // ─── TABLES (physical cafe tables with QR codes) ─────────────────────────────
 
 model Table {
-  id        String   @id @default(cuid())
-  number    Int      @unique
-  qrCode    String?
-  isActive  Boolean  @default(true)
-  orders    Order[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String       @id @default(cuid())
+  number      Int          @unique
+  qrCode      String?
+  isActive    Boolean      @default(true)
+  orders      Order[]
+  waiterCalls WaiterCall[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
 }
 
 // ─── ORDERS ─────────────────────────────────────────────────────────────────
@@ -89,6 +90,7 @@ model Order {
   notes             String?
   items             OrderItem[]
   complaints        OrderComplaint[]
+  waiterCalls       WaiterCall[]
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
 }
@@ -165,4 +167,33 @@ model OrderComplaint {
   @@index([orderId])
   @@index([status])
 }
+
+// ─── WAITER CALLS / TABLE ASSISTANCE REQUESTS ─────────────────────────────────
+
+model WaiterCall {
+  id          String           @id @default(cuid())
+  tableNumber Int
+  table       Table?           @relation(fields: [tableId], references: [id], onDelete: SetNull)
+  tableId     String?
+  order       Order?           @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId     String?
+  reason      String           @default("ASSISTANCE") // ASSISTANCE, BILL, WATER, CUTLERY, CLEANING, COMPLAINT, OTHER
+  notes       String?
+  status      WaiterCallStatus @default(PENDING) // PENDING, ACKNOWLEDGED, RESOLVED, CANCELLED
+  resolvedBy  String?
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  @@index([status])
+  @@index([tableNumber])
+  @@index([createdAt])
+}
+
+enum WaiterCallStatus {
+  PENDING
+  ACKNOWLEDGED
+  RESOLVED
+  CANCELLED
+}
+
 

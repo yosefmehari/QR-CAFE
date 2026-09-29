@@ -50,6 +50,9 @@ export default async function WaiterDashboardPage() {
           number: true,
         },
       },
+      complaints: {
+        orderBy: { createdAt: 'desc' },
+      },
       items: {
         include: {
           product: {
@@ -74,6 +77,18 @@ export default async function WaiterDashboardPage() {
     },
   })
 
+  // Fetch active waiter calls (pending or acknowledged)
+  const activeWaiterCalls = await prisma.waiterCall.findMany({
+    where: {
+      status: { in: ['PENDING', 'ACKNOWLEDGED'] },
+    },
+    include: {
+      table: { select: { id: true, number: true } },
+      order: { select: { id: true, status: true, totalPrice: true } },
+    },
+    orderBy: { createdAt: 'asc' },
+  })
+
   // Serialize Decimals and Dates
   const initialOrders: WaiterOrder[] = activeOrders.map((order) => ({
     id: order.id,
@@ -96,6 +111,16 @@ export default async function WaiterDashboardPage() {
           number: order.table.number,
         }
       : null,
+    complaints: order.complaints.map((c) => ({
+      id: c.id,
+      category: c.category,
+      items: c.items,
+      details: c.details,
+      desiredAction: c.desiredAction,
+      status: c.status,
+      staffNotes: c.staffNotes,
+      createdAt: c.createdAt.toISOString(),
+    })),
     items: order.items.map((item) => ({
       id: item.id,
       quantity: item.quantity,
@@ -114,6 +139,24 @@ export default async function WaiterDashboardPage() {
           : null,
       },
     })),
+  }))
+
+  const initialCalls = activeWaiterCalls.map((call) => ({
+    id: call.id,
+    tableNumber: call.tableNumber,
+    reason: call.reason,
+    notes: call.notes,
+    status: call.status as 'PENDING' | 'ACKNOWLEDGED' | 'RESOLVED' | 'CANCELLED',
+    resolvedBy: call.resolvedBy,
+    createdAt: call.createdAt.toISOString(),
+    order: call.order
+      ? {
+          id: call.order.id,
+          status: call.order.status,
+          totalPrice: call.order.totalPrice.toNumber(),
+        }
+      : null,
+    table: call.table,
   }))
 
   return (
@@ -179,7 +222,7 @@ export default async function WaiterDashboardPage() {
 
       {/* Main Waiter Workspace */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 py-6 sm:py-8">
-        <WaiterDisplayClient initialOrders={initialOrders} tables={tables} />
+        <WaiterDisplayClient initialOrders={initialOrders} initialCalls={initialCalls} tables={tables} />
       </main>
     </div>
   )

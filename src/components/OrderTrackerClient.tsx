@@ -22,6 +22,7 @@ import {
 } from 'lucide-react'
 import { getProductImage } from '@/lib/images'
 import OrderComplaintModal from './OrderComplaintModal'
+import CallWaiterModal from './CallWaiterModal'
 
 export type OrderStatus =
   | 'PENDING'
@@ -161,6 +162,7 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [lastUpdated, setLastUpdated] = useState<Date>(new Date())
   const [isComplaintModalOpen, setIsComplaintModalOpen] = useState(false)
+  const [isCallWaiterOpen, setIsCallWaiterOpen] = useState(false)
 
   const isDelivery = order.orderType === 'DELIVERY'
   const currentSteps = isDelivery ? DELIVERY_STATUS_STEPS : DINE_IN_STATUS_STEPS
@@ -758,27 +760,52 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
                   </div>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => setIsComplaintModalOpen(true)}
-                  className="shrink-0 px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
-                >
-                  <AlertTriangle className="w-3.5 h-3.5" />
-                  <span>Return Food / Complain</span>
-                </button>
+                <div className="shrink-0 flex items-center gap-2 flex-wrap">
+                  {order.tableNumber && (
+                    <button
+                      type="button"
+                      onClick={() => setIsCallWaiterOpen(true)}
+                      className="px-4 py-2.5 rounded-xl text-xs font-bold bg-amber-500 hover:bg-amber-600 text-white shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Bell className="w-3.5 h-3.5 animate-bounce" />
+                      <span>Call Waiter to Table</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setIsComplaintModalOpen(true)}
+                    className="px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white shadow-sm transition-all cursor-pointer flex items-center gap-1.5"
+                  >
+                    <AlertTriangle className="w-3.5 h-3.5" />
+                    <span>Return Food / Complain</span>
+                  </button>
+                </div>
               </div>
             )}
           </div>
 
           {/* Action Footer */}
           <div className="p-6 bg-zinc-50 dark:bg-zinc-950/60 border-t border-zinc-100 dark:border-zinc-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-            <Link
-              href={order.tableNumber ? `/?table=${order.tableNumber}` : '/'}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-bold text-xs bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 transition-all cursor-pointer"
-            >
-              {isDelivery ? <Bike className="w-3.5 h-3.5" /> : <UtensilsCrossed className="w-3.5 h-3.5" />}
-              <span>{order.tableNumber ? `Order More for Table #${order.tableNumber}` : 'Order More Items'}</span>
-            </Link>
+            <div className="flex flex-col sm:flex-row items-center gap-3 w-full sm:w-auto">
+              <Link
+                href={order.tableNumber ? `/?table=${order.tableNumber}` : '/'}
+                className="w-full sm:w-auto inline-flex items-center justify-center gap-2 py-3.5 px-6 rounded-2xl font-bold text-xs bg-amber-500 hover:bg-amber-600 text-white shadow-md shadow-amber-500/20 transition-all cursor-pointer"
+              >
+                {isDelivery ? <Bike className="w-3.5 h-3.5" /> : <UtensilsCrossed className="w-3.5 h-3.5" />}
+                <span>{order.tableNumber ? `Order More for Table #${order.tableNumber}` : 'Order More Items'}</span>
+              </Link>
+
+              {order.tableNumber && (
+                <button
+                  type="button"
+                  onClick={() => setIsCallWaiterOpen(true)}
+                  className="w-full sm:w-auto inline-flex items-center justify-center gap-2 py-3.5 px-5 rounded-2xl font-bold text-xs bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:hover:bg-white text-white dark:text-zinc-900 transition-all cursor-pointer"
+                >
+                  <Bell className="w-3.5 h-3.5 text-amber-500 animate-bounce" />
+                  <span>Call Waiter (Table #{order.tableNumber})</span>
+                </button>
+              )}
+            </div>
 
             <Link
               href="/tables"
@@ -795,6 +822,14 @@ export default function OrderTrackerClient({ initialOrder }: Props) {
           isOpen={isComplaintModalOpen}
           onClose={() => setIsComplaintModalOpen(false)}
           onComplaintSubmitted={handleManualRefresh}
+        />
+
+        {/* Call Waiter Modal */}
+        <CallWaiterModal
+          isOpen={isCallWaiterOpen}
+          onClose={() => setIsCallWaiterOpen(false)}
+          tableNumber={order.tableNumber}
+          orderId={order.id}
         />
       </div>
     </div>
